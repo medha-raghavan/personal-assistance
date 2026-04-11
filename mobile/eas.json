@@ -24,6 +24,9 @@
     "preview-apk": {
       "distribution": "internal",
       "developmentClient": false,
+      "cache": {
+        "disabled": true
+      },
       "android": {
         "buildType": "apk"
       },
