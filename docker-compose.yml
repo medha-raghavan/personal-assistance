@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: finance-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=personal-finance
+    networks:
+      - finance-network
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finance-api
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mongodb
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - MONGODB_URI=mongodb://mongodb:27017/personal-finance
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-your-refresh-secret-key-change-in-production}
+      - JWT_EXPIRES_IN=15m
+      - JWT_REFRESH_EXPIRES_IN=7d
+      - UPLOAD_DIR=/app/uploads
+      - MAX_FILE_SIZE=10485760
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - finance-network
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: finance-web
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - finance-network
+
+volumes:
+  mongo_data:
+  uploads_data:
+
+networks:
+  finance-network:
+    driver: bridge
