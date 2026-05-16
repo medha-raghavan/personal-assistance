@@ -1,9 +1,20 @@
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { TouchableOpacity } from 'react-native';
 import { useTheme } from '../../components/ThemeProvider';
 
 export default function TabLayout() {
   const { isDark, colors } = useTheme();
+  const router = useRouter();
+  
+  const BackButton = () => (
+    <TouchableOpacity 
+      onPress={() => router.back()} 
+      className="ml-4"
+    >
+      <Ionicons name="arrow-back" size={24} color={colors.text} />
+    </TouchableOpacity>
+  );
   
   return (
     <Tabs
@@ -59,19 +70,19 @@ export default function TabLayout() {
       <Tabs.Screen
         name="sections"
         options={{
+          href: null,
           title: 'Accounts',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="wallet-outline" size={size} color={color} />
-          ),
+          headerShown: true,
+          headerLeft: () => <BackButton />,
         }}
       />
       <Tabs.Screen
         name="categories"
         options={{
+          href: null,
           title: 'Categories',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="pricetags-outline" size={size} color={color} />
-          ),
+          headerShown: true,
+          headerLeft: () => <BackButton />,
         }}
       />
       <Tabs.Screen

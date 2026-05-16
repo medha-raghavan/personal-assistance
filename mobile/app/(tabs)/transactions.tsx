@@ -13,6 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -88,6 +89,7 @@ interface Trip {
 
 export default function TransactionsScreen() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [showFilters, setShowFilters] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -388,6 +390,34 @@ export default function TransactionsScreen() {
       {/* FAB Menu Options */}
       {showFabMenu && (
         <View className="absolute bottom-24 right-4 items-end">
+          <TouchableOpacity
+            className="flex-row items-center mb-3"
+            onPress={() => {
+              setShowFabMenu(false);
+              router.push('/(tabs)/categories');
+            }}
+          >
+            <View className="bg-white rounded-lg px-3 py-2 mr-3 shadow-md">
+              <Text className="text-gray-800 font-medium">Categories</Text>
+            </View>
+            <View className="w-12 h-12 rounded-full bg-orange-500 items-center justify-center shadow-lg">
+              <Ionicons name="pricetags" size={22} color="white" />
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="flex-row items-center mb-3"
+            onPress={() => {
+              setShowFabMenu(false);
+              router.push('/(tabs)/sections');
+            }}
+          >
+            <View className="bg-white rounded-lg px-3 py-2 mr-3 shadow-md">
+              <Text className="text-gray-800 font-medium">Accounts</Text>
+            </View>
+            <View className="w-12 h-12 rounded-full bg-blue-500 items-center justify-center shadow-lg">
+              <Ionicons name="wallet" size={22} color="white" />
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity
             className="flex-row items-center mb-3"
             onPress={() => {
