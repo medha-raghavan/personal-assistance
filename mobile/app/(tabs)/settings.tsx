@@ -124,6 +124,12 @@ export default function SettingsScreen() {
       onPress: () => router.push('/(tabs)/categories'),
     },
     {
+      icon: 'logo-whatsapp',
+      title: 'WhatsApp',
+      subtitle: 'Schedule and send WhatsApp messages',
+      onPress: () => router.push('/(tabs)/whatsapp'),
+    },
+    {
       icon: 'airplane-outline',
       title: 'Trips',
       subtitle: 'View and manage your trips',

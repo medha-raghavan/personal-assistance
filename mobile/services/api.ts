@@ -554,4 +554,86 @@ export const uploadService = {
   },
 };
 
+// WhatsApp Service
+export type ScheduledMessageStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'cancelled';
+
+export interface WhatsAppConnectionStatus {
+  status: 'disconnected' | 'connecting' | 'qr' | 'connected';
+  qrDataUrl: string | null;
+  phoneNumber: string | null;
+  lastError: string | null;
+  hasSavedSession: boolean;
+}
+
+export interface ScheduledWhatsAppMessage {
+  _id: string;
+  userId: string;
+  recipientPhone: string;
+  recipientName?: string;
+  message: string;
+  scheduledAt: string;
+  status: ScheduledMessageStatus;
+  sentAt?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const whatsappService = {
+  async getStatus(): Promise<WhatsAppConnectionStatus> {
+    const response = await api.get('/whatsapp/status');
+    return response.data.data;
+  },
+
+  async connect(): Promise<WhatsAppConnectionStatus> {
+    const response = await api.post('/whatsapp/connect');
+    return response.data.data;
+  },
+
+  async disconnect(): Promise<WhatsAppConnectionStatus> {
+    const response = await api.post('/whatsapp/disconnect');
+    return response.data.data;
+  },
+
+  async getMessages(status?: string): Promise<ScheduledWhatsAppMessage[]> {
+    const response = await api.get('/whatsapp/messages', {
+      params: status && status !== 'all' ? { status } : undefined,
+    });
+    return response.data.data;
+  },
+
+  async createMessage(data: {
+    recipientPhone: string;
+    recipientName?: string;
+    message: string;
+    scheduledAt?: string;
+    sendNow?: boolean;
+  }): Promise<ScheduledWhatsAppMessage> {
+    const response = await api.post('/whatsapp/messages', data);
+    return response.data.data;
+  },
+
+  async updateMessage(
+    id: string,
+    data: {
+      recipientPhone?: string;
+      recipientName?: string;
+      message?: string;
+      scheduledAt?: string;
+    }
+  ): Promise<ScheduledWhatsAppMessage> {
+    const response = await api.put(`/whatsapp/messages/${id}`, data);
+    return response.data.data;
+  },
+
+  async cancelMessage(id: string): Promise<ScheduledWhatsAppMessage> {
+    const response = await api.post(`/whatsapp/messages/${id}/cancel`);
+    return response.data.data;
+  },
+
+  async deleteMessage(id: string): Promise<void> {
+    await api.delete(`/whatsapp/messages/${id}`);
+  },
+};
+
 export default api;
