@@ -34,8 +34,10 @@ services:
       - JWT_REFRESH_EXPIRES_IN=7d
       - UPLOAD_DIR=/app/uploads
       - MAX_FILE_SIZE=10485760
+      - WHATSAPP_SESSIONS_DIR=/app/whatsapp-sessions
     volumes:
       - uploads_data:/app/uploads
+      - whatsapp_sessions:/app/whatsapp-sessions
     networks:
       - finance-network
 
@@ -55,6 +57,7 @@ services:
 volumes:
   mongo_data:
   uploads_data:
+  whatsapp_sessions:
 
 networks:
   finance-network:

@@ -8,3 +8,4 @@ export { Trips } from './Trips';
 export { TripDetails } from './TripDetails';
 export { Tax } from './Tax';
 export { Categories } from './Categories';
+export { WhatsApp } from './WhatsApp';

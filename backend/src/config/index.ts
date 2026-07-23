@@ -22,4 +22,8 @@ export const config = {
     dir: process.env.UPLOAD_DIR || './uploads',
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10485760', 10),
   },
+
+  whatsapp: {
+    sessionsDir: process.env.WHATSAPP_SESSIONS_DIR || './whatsapp-sessions',
+  },
 };
