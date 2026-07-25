@@ -245,9 +245,43 @@ export async function ensureConnected(userId: string): Promise<boolean> {
   return getOrCreateState(userId).status === 'connected';
 }
 
-export async function sendWhatsAppText(
+export interface WhatsAppGroupInfo {
+  id: string;
+  name: string;
+  participantCount: number;
+}
+
+const GROUP_JID_RE = /^\d+@g\.us$/;
+
+export function isGroupJid(jid: string): boolean {
+  return GROUP_JID_RE.test(jid);
+}
+
+export async function listWhatsAppGroups(userId: string): Promise<WhatsAppGroupInfo[]> {
+  const connected = await ensureConnected(userId);
+  const state = getOrCreateState(userId);
+
+  if (!connected || !state.socket) {
+    throw new Error('WhatsApp is not connected. Please scan the QR code first.');
+  }
+
+  const groupsMap = await state.socket.groupFetchAllParticipating();
+  const groups: WhatsAppGroupInfo[] = Object.values(groupsMap || {}).map(
+    (g: { id?: string; subject?: string; participants?: unknown[] }) => ({
+      id: String(g.id || ''),
+      name: String(g.subject || 'Unnamed group'),
+      participantCount: Array.isArray(g.participants) ? g.participants.length : 0,
+    })
+  );
+
+  return groups
+    .filter((g) => g.id && isGroupJid(g.id))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+export async function sendWhatsAppMessage(
   userId: string,
-  phone: string,
+  jid: string,
   message: string
 ): Promise<void> {
   const connected = await ensureConnected(userId);
@@ -257,15 +291,52 @@ export async function sendWhatsAppText(
     throw new Error('WhatsApp is not connected. Please scan the QR code first.');
   }
 
-  const jid = toWhatsAppJid(phone);
-
-  const results = await state.socket.onWhatsApp(normalizePhoneNumber(phone));
-  const exists = Array.isArray(results) && results[0]?.exists;
-  if (!exists) {
-    throw new Error(`Phone number ${normalizePhoneNumber(phone)} is not registered on WhatsApp`);
+  if (isGroupJid(jid)) {
+    await state.socket.sendMessage(jid, { text: message });
+    return;
   }
 
-  await state.socket.sendMessage(jid, { text: message });
+  const phone = normalizePhoneNumber(jid.replace(/@s\.whatsapp\.net$/, ''));
+  const contactJid = toWhatsAppJid(phone);
+
+  const results = await state.socket.onWhatsApp(phone);
+  const exists = Array.isArray(results) && results[0]?.exists;
+  if (!exists) {
+    throw new Error(`Phone number ${phone} is not registered on WhatsApp`);
+  }
+
+  await state.socket.sendMessage(contactJid, { text: message });
+}
+
+export async function sendWhatsAppText(
+  userId: string,
+  phone: string,
+  message: string
+): Promise<void> {
+  await sendWhatsAppMessage(userId, toWhatsAppJid(phone), message);
+}
+
+export async function sendScheduledWhatsAppMessage(
+  userId: string,
+  opts: {
+    recipientType?: 'contact' | 'group';
+    recipientPhone?: string;
+    recipientJid?: string;
+    message: string;
+  }
+): Promise<void> {
+  if (opts.recipientType === 'group') {
+    if (!opts.recipientJid || !isGroupJid(opts.recipientJid)) {
+      throw new Error('Invalid or missing group JID');
+    }
+    await sendWhatsAppMessage(userId, opts.recipientJid, opts.message);
+    return;
+  }
+
+  if (!opts.recipientPhone) {
+    throw new Error('Recipient phone is required');
+  }
+  await sendWhatsAppText(userId, opts.recipientPhone, opts.message);
 }
 
 export async function restoreSavedSessions(): Promise<void> {

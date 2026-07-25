@@ -1,5 +1,5 @@
 import { ScheduledWhatsAppMessage } from '../models/ScheduledWhatsAppMessage.js';
-import { sendWhatsAppText } from './whatsapp.service.js';
+import { sendScheduledWhatsAppMessage } from './whatsapp.service.js';
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let isProcessing = false;
@@ -21,17 +21,23 @@ async function processDueMessages(): Promise<void> {
       msg.status = 'sending';
       await msg.save();
 
+      const targetLabel =
+        msg.recipientType === 'group'
+          ? msg.recipientName || msg.recipientJid || 'group'
+          : msg.recipientPhone;
+
       try {
-        await sendWhatsAppText(
-          msg.userId.toString(),
-          msg.recipientPhone,
-          msg.message
-        );
+        await sendScheduledWhatsAppMessage(msg.userId.toString(), {
+          recipientType: msg.recipientType || 'contact',
+          recipientPhone: msg.recipientPhone,
+          recipientJid: msg.recipientJid,
+          message: msg.message,
+        });
         msg.status = 'sent';
         msg.sentAt = new Date();
         msg.error = undefined;
         await msg.save();
-        console.log(`[Scheduler] Sent message ${msg._id} to ${msg.recipientPhone}`);
+        console.log(`[Scheduler] Sent message ${msg._id} to ${targetLabel}`);
       } catch (err) {
         msg.status = 'failed';
         msg.error = err instanceof Error ? err.message : 'Failed to send message';

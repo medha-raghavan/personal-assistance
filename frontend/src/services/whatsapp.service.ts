@@ -3,6 +3,8 @@ import {
   ApiResponse,
   ScheduledWhatsAppMessage,
   WhatsAppConnectionStatus,
+  WhatsAppGroup,
+  WhatsAppRecipientType,
 } from '../types';
 
 export const whatsappService = {
@@ -21,6 +23,11 @@ export const whatsappService = {
     return response.data.data;
   },
 
+  async getGroups(): Promise<WhatsAppGroup[]> {
+    const response = await api.get<ApiResponse<WhatsAppGroup[]>>('/whatsapp/groups');
+    return response.data.data;
+  },
+
   async getMessages(status?: string): Promise<ScheduledWhatsAppMessage[]> {
     const response = await api.get<ApiResponse<ScheduledWhatsAppMessage[]>>('/whatsapp/messages', {
       params: status && status !== 'all' ? { status } : undefined,
@@ -29,7 +36,9 @@ export const whatsappService = {
   },
 
   async createMessage(data: {
-    recipientPhone: string;
+    recipientType?: WhatsAppRecipientType;
+    recipientPhone?: string;
+    recipientJid?: string;
     recipientName?: string;
     message: string;
     scheduledAt?: string;
@@ -45,7 +54,9 @@ export const whatsappService = {
   async updateMessage(
     id: string,
     data: {
+      recipientType?: WhatsAppRecipientType;
       recipientPhone?: string;
+      recipientJid?: string;
       recipientName?: string;
       message?: string;
       scheduledAt?: string;

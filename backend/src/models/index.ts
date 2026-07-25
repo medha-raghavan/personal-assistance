@@ -12,4 +12,5 @@ export {
   ScheduledWhatsAppMessage,
   IScheduledWhatsAppMessage,
   ScheduledMessageStatus,
+  RecipientType,
 } from './ScheduledWhatsAppMessage.js';

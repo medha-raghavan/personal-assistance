@@ -3,6 +3,7 @@ import {
   getStatus,
   connect,
   disconnect,
+  listGroups,
   listMessages,
   createMessage,
   cancelMessage,
@@ -18,6 +19,8 @@ router.use(authenticate);
 router.get('/status', getStatus);
 router.post('/connect', connect);
 router.post('/disconnect', disconnect);
+
+router.get('/groups', listGroups);
 
 router.get('/messages', listMessages);
 router.post('/messages', createMessage);

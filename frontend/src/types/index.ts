@@ -227,6 +227,7 @@ export interface ApiResponse<T> {
 }
 
 export type ScheduledMessageStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'cancelled';
+export type WhatsAppRecipientType = 'contact' | 'group';
 
 export interface WhatsAppConnectionStatus {
   status: 'disconnected' | 'connecting' | 'qr' | 'connected';
@@ -236,10 +237,18 @@ export interface WhatsAppConnectionStatus {
   hasSavedSession: boolean;
 }
 
+export interface WhatsAppGroup {
+  id: string;
+  name: string;
+  participantCount: number;
+}
+
 export interface ScheduledWhatsAppMessage {
   _id: string;
   userId: string;
-  recipientPhone: string;
+  recipientType?: WhatsAppRecipientType;
+  recipientPhone?: string;
+  recipientJid?: string;
   recipientName?: string;
   message: string;
   scheduledAt: string;

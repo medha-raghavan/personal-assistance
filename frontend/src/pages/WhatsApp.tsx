@@ -17,6 +17,7 @@ import {
   Contact,
   Search,
   Unplug,
+  Users,
 } from 'lucide-react';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { Card, Button, Input, Modal, Badge, Select } from '../components/common';
@@ -26,7 +27,26 @@ import {
   GoogleContact,
   ScheduledMessageStatus,
   ScheduledWhatsAppMessage,
+  WhatsAppGroup,
+  WhatsAppRecipientType,
 } from '../types';
+
+function recipientLabel(msg: ScheduledWhatsAppMessage): string {
+  if (msg.recipientType === 'group') {
+    return msg.recipientName || 'WhatsApp group';
+  }
+  return msg.recipientName || (msg.recipientPhone ? `+${msg.recipientPhone}` : 'Unknown');
+}
+
+function recipientSubLabel(msg: ScheduledWhatsAppMessage): string | null {
+  if (msg.recipientType === 'group') {
+    return null;
+  }
+  if (msg.recipientName && msg.recipientPhone) {
+    return `+${msg.recipientPhone}`;
+  }
+  return null;
+}
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'All' },
@@ -396,11 +416,12 @@ export function WhatsApp() {
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={statusBadgeVariant(msg.status)}>{msg.status}</Badge>
-                    <span className="font-medium text-white">
-                      {msg.recipientName || `+${msg.recipientPhone}`}
-                    </span>
-                    {msg.recipientName && (
-                      <span className="text-sm text-gray-400">+{msg.recipientPhone}</span>
+                    {msg.recipientType === 'group' && (
+                      <Badge variant="default">Group</Badge>
+                    )}
+                    <span className="font-medium text-white">{recipientLabel(msg)}</span>
+                    {recipientSubLabel(msg) && (
+                      <span className="text-sm text-gray-400">{recipientSubLabel(msg)}</span>
                     )}
                   </div>
                   <p className="text-gray-300 whitespace-pre-wrap break-words">{msg.message}</p>
@@ -501,8 +522,10 @@ function ComposeModal({
   connectingGoogle: boolean;
 }) {
   const queryClient = useQueryClient();
+  const [recipientType, setRecipientType] = useState<WhatsAppRecipientType>('contact');
   const [formData, setFormData] = useState({
     recipientPhone: '',
+    recipientJid: '',
     recipientName: '',
     message: '',
     scheduledAt: defaultScheduleValue(),
@@ -510,19 +533,26 @@ function ComposeModal({
   const [sendMode, setSendMode] = useState<'schedule' | 'now'>('schedule');
   const [formError, setFormError] = useState<string | null>(null);
   const [showContacts, setShowContacts] = useState(false);
+  const [showGroups, setShowGroups] = useState(false);
 
   useEffect(() => {
     if (message) {
+      const type: WhatsAppRecipientType =
+        message.recipientType === 'group' ? 'group' : 'contact';
+      setRecipientType(type);
       setFormData({
-        recipientPhone: message.recipientPhone,
+        recipientPhone: message.recipientPhone || '',
+        recipientJid: message.recipientJid || '',
         recipientName: message.recipientName || '',
         message: message.message,
         scheduledAt: toLocalDateTimeValue(parseISO(message.scheduledAt)),
       });
       setSendMode('schedule');
     } else {
+      setRecipientType('contact');
       setFormData({
         recipientPhone: '',
+        recipientJid: '',
         recipientName: '',
         message: '',
         scheduledAt: defaultScheduleValue(),
@@ -531,16 +561,21 @@ function ComposeModal({
     }
     setFormError(null);
     setShowContacts(false);
+    setShowGroups(false);
   }, [message, isOpen]);
 
+  type MessagePayload = {
+    recipientType: WhatsAppRecipientType;
+    recipientPhone?: string;
+    recipientJid?: string;
+    recipientName?: string;
+    message: string;
+    scheduledAt?: string;
+    sendNow?: boolean;
+  };
+
   const createMutation = useMutation({
-    mutationFn: (payload: {
-      recipientPhone: string;
-      recipientName?: string;
-      message: string;
-      scheduledAt?: string;
-      sendNow?: boolean;
-    }) => whatsappService.createMessage(payload),
+    mutationFn: (payload: MessagePayload) => whatsappService.createMessage(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-messages'] });
       onClose();
@@ -551,12 +586,8 @@ function ComposeModal({
   });
 
   const updateMutation = useMutation({
-    mutationFn: (payload: {
-      recipientPhone: string;
-      recipientName?: string;
-      message: string;
-      scheduledAt: string;
-    }) => whatsappService.updateMessage(message!._id, payload),
+    mutationFn: (payload: MessagePayload) =>
+      whatsappService.updateMessage(message!._id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-messages'] });
       onClose();
@@ -566,22 +597,49 @@ function ComposeModal({
     },
   });
 
+  const buildPayload = (opts: { sendNow?: boolean; scheduledAt?: string }): MessagePayload | null => {
+    if (!formData.message.trim()) {
+      setFormError('Message cannot be empty');
+      return null;
+    }
+
+    if (recipientType === 'group') {
+      if (!formData.recipientJid.trim()) {
+        setFormError('Pick a WhatsApp group');
+        return null;
+      }
+      return {
+        recipientType: 'group',
+        recipientJid: formData.recipientJid.trim(),
+        recipientName: formData.recipientName.trim() || undefined,
+        message: formData.message.trim(),
+        ...opts,
+      };
+    }
+
+    if (!formData.recipientPhone.trim()) {
+      setFormError('Phone number and message are required');
+      return null;
+    }
+
+    return {
+      recipientType: 'contact',
+      recipientPhone: formData.recipientPhone.trim(),
+      recipientName: formData.recipientName.trim() || undefined,
+      message: formData.message.trim(),
+      ...opts,
+    };
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
-    if (!formData.recipientPhone.trim() || !formData.message.trim()) {
-      setFormError('Phone number and message are required');
-      return;
-    }
-
     if (message) {
-      updateMutation.mutate({
-        recipientPhone: formData.recipientPhone.trim(),
-        recipientName: formData.recipientName.trim() || undefined,
-        message: formData.message.trim(),
+      const payload = buildPayload({
         scheduledAt: new Date(formData.scheduledAt).toISOString(),
       });
+      if (payload) updateMutation.mutate(payload);
       return;
     }
 
@@ -590,19 +648,13 @@ function ComposeModal({
         setFormError('Connect WhatsApp before sending now');
         return;
       }
-      createMutation.mutate({
-        recipientPhone: formData.recipientPhone.trim(),
-        recipientName: formData.recipientName.trim() || undefined,
-        message: formData.message.trim(),
-        sendNow: true,
-      });
+      const payload = buildPayload({ sendNow: true });
+      if (payload) createMutation.mutate(payload);
     } else {
-      createMutation.mutate({
-        recipientPhone: formData.recipientPhone.trim(),
-        recipientName: formData.recipientName.trim() || undefined,
-        message: formData.message.trim(),
+      const payload = buildPayload({
         scheduledAt: new Date(formData.scheduledAt).toISOString(),
       });
+      if (payload) createMutation.mutate(payload);
     }
   };
 
@@ -617,40 +669,109 @@ function ComposeModal({
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <Input
-                label="Phone number (with country code)"
-                value={formData.recipientPhone}
-                onChange={(e) => setFormData({ ...formData, recipientPhone: e.target.value })}
-                placeholder="e.g. 919876543210"
-                required
-              />
-            </div>
-            <Button
+          <div className="flex gap-2">
+            <button
               type="button"
-              variant="secondary"
-              leftIcon={<Contact className="w-4 h-4" />}
               onClick={() => {
-                if (!googleConnected) {
-                  onConnectGoogle();
-                  return;
-                }
-                setShowContacts(true);
+                setRecipientType('contact');
+                setFormData((prev) => ({
+                  ...prev,
+                  recipientJid: '',
+                  recipientName: prev.recipientPhone ? prev.recipientName : '',
+                }));
               }}
-              isLoading={connectingGoogle}
-              className="mb-0"
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                recipientType === 'contact'
+                  ? 'border-primary-500 bg-primary-600/20 text-primary-300'
+                  : 'border-gray-600 text-gray-400 hover:bg-gray-700'
+              }`}
             >
-              Contacts
-            </Button>
+              Contact
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRecipientType('group');
+                setFormData((prev) => ({
+                  ...prev,
+                  recipientPhone: '',
+                }));
+              }}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                recipientType === 'group'
+                  ? 'border-primary-500 bg-primary-600/20 text-primary-300'
+                  : 'border-gray-600 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              Group
+            </button>
           </div>
 
-          <Input
-            label="Recipient name (optional)"
-            value={formData.recipientName}
-            onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
-            placeholder="e.g. Mom"
-          />
+          {recipientType === 'contact' ? (
+            <>
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Input
+                    label="Phone number (with country code)"
+                    value={formData.recipientPhone}
+                    onChange={(e) =>
+                      setFormData({ ...formData, recipientPhone: e.target.value })
+                    }
+                    placeholder="e.g. 919876543210"
+                    required
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  leftIcon={<Contact className="w-4 h-4" />}
+                  onClick={() => {
+                    if (!googleConnected) {
+                      onConnectGoogle();
+                      return;
+                    }
+                    setShowContacts(true);
+                  }}
+                  isLoading={connectingGoogle}
+                  className="mb-0"
+                >
+                  Contacts
+                </Button>
+              </div>
+
+              <Input
+                label="Recipient name (optional)"
+                value={formData.recipientName}
+                onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
+                placeholder="e.g. Mom"
+              />
+            </>
+          ) : (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-300">WhatsApp group</label>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-100 truncate">
+                  {formData.recipientJid
+                    ? formData.recipientName || formData.recipientJid
+                    : 'No group selected'}
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  leftIcon={<Users className="w-4 h-4" />}
+                  onClick={() => {
+                    if (!isConnected) {
+                      setFormError('Connect WhatsApp to pick a group');
+                      return;
+                    }
+                    setShowGroups(true);
+                  }}
+                >
+                  Pick group
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Message</label>
@@ -740,8 +861,25 @@ function ComposeModal({
             ...prev,
             recipientPhone: phone.phone,
             recipientName: contact.name,
+            recipientJid: '',
           }));
+          setRecipientType('contact');
           setShowContacts(false);
+        }}
+      />
+
+      <GroupPickerModal
+        isOpen={showGroups}
+        onClose={() => setShowGroups(false)}
+        onSelect={(group) => {
+          setFormData((prev) => ({
+            ...prev,
+            recipientJid: group.id,
+            recipientName: group.name,
+            recipientPhone: '',
+          }));
+          setRecipientType('group');
+          setShowGroups(false);
         }}
       />
     </>
@@ -846,6 +984,91 @@ function ContactPickerModal({
                   ))}
                 </div>
               </div>
+            ))
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function GroupPickerModal({
+  isOpen,
+  onClose,
+  onSelect,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (group: WhatsAppGroup) => void;
+}) {
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) setSearch('');
+  }, [isOpen]);
+
+  const { data: groups = [], isLoading, isFetching, error, refetch } = useQuery({
+    queryKey: ['whatsapp-groups'],
+    queryFn: () => whatsappService.getGroups(),
+    enabled: isOpen,
+  });
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter((g) => g.name.toLowerCase().includes(q));
+  }, [groups, search]);
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Pick a WhatsApp group" size="lg">
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search groups..."
+            className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            autoFocus
+          />
+        </div>
+
+        {error && (
+          <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-lg p-3 flex items-center justify-between gap-3">
+            <span>
+              {(error as { response?: { data?: { error?: { message?: string } } } }).response?.data
+                ?.error?.message || 'Failed to load groups'}
+            </span>
+            <Button type="button" variant="secondary" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </div>
+        )}
+
+        <div className="max-h-96 overflow-y-auto space-y-2">
+          {isLoading || isFetching ? (
+            <p className="text-center text-gray-400 py-8">Loading groups...</p>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-gray-400 py-8">No groups found.</p>
+          ) : (
+            filtered.map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => onSelect(group)}
+                className="w-full text-left flex items-center gap-3 rounded-lg border border-gray-700 bg-gray-800/60 p-3 hover:bg-primary-600/20 hover:border-primary-500 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-full bg-primary-600/30 text-primary-300 flex items-center justify-center flex-shrink-0">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium text-white truncate">{group.name}</p>
+                  <p className="text-xs text-gray-400">
+                    {group.participantCount} participant
+                    {group.participantCount === 1 ? '' : 's'}
+                  </p>
+                </div>
+              </button>
             ))
           )}
         </div>
