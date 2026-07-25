@@ -250,6 +250,27 @@ export interface ScheduledWhatsAppMessage {
   updatedAt: string;
 }
 
+export interface GoogleConnectionStatus {
+  configured: boolean;
+  connected: boolean;
+  email: string | null;
+  connectedAt: string | null;
+}
+
+export interface GoogleContactPhone {
+  label?: string;
+  phone: string;
+  displayPhone: string;
+}
+
+export interface GoogleContact {
+  resourceName: string;
+  name: string;
+  email?: string;
+  photoUrl?: string;
+  phones: GoogleContactPhone[];
+}
+
 export interface PaginatedResponse<T> {
   transactions: T[];
   pagination: {

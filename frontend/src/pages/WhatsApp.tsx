@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import {
   MessageCircle,
   Plus,
@@ -13,11 +14,19 @@ import {
   CheckCircle2,
   AlertCircle,
   Pencil,
+  Contact,
+  Search,
+  Unplug,
 } from 'lucide-react';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { Card, Button, Input, Modal, Badge, Select } from '../components/common';
 import { whatsappService } from '../services/whatsapp.service';
-import { ScheduledMessageStatus, ScheduledWhatsAppMessage } from '../types';
+import { googleService } from '../services/google.service';
+import {
+  GoogleContact,
+  ScheduledMessageStatus,
+  ScheduledWhatsAppMessage,
+} from '../types';
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'All' },
@@ -58,9 +67,30 @@ function defaultScheduleValue(): string {
 
 export function WhatsApp() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCompose, setShowCompose] = useState(false);
   const [editing, setEditing] = useState<ScheduledWhatsAppMessage | null>(null);
+  const [googleBanner, setGoogleBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    const google = searchParams.get('google');
+    if (!google) return;
+
+    if (google === 'connected') {
+      setGoogleBanner('Google Contacts connected');
+      queryClient.invalidateQueries({ queryKey: ['google-status'] });
+    } else if (google === 'error') {
+      setGoogleBanner(
+        searchParams.get('message') || 'Failed to connect Google Contacts'
+      );
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('google');
+    next.delete('message');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, queryClient]);
 
   const {
     data: connection,
@@ -72,6 +102,11 @@ export function WhatsApp() {
       const status = query.state.data?.status;
       return status === 'qr' || status === 'connecting' ? 2000 : 10000;
     },
+  });
+
+  const { data: googleStatus, isLoading: googleLoading } = useQuery({
+    queryKey: ['google-status'],
+    queryFn: () => googleService.getStatus(),
   });
 
   const { data: messages = [], isLoading: messagesLoading } = useQuery({
@@ -94,6 +129,27 @@ export function WhatsApp() {
     },
   });
 
+  const googleConnectMutation = useMutation({
+    mutationFn: () => googleService.getAuthUrl('/whatsapp'),
+    onSuccess: (url) => {
+      window.location.href = url;
+    },
+    onError: (err: { response?: { data?: { error?: { message?: string } } } }) => {
+      setGoogleBanner(
+        err.response?.data?.error?.message || 'Failed to start Google sign-in'
+      );
+    },
+  });
+
+  const googleDisconnectMutation = useMutation({
+    mutationFn: () => googleService.disconnect(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['google-status'] });
+      queryClient.removeQueries({ queryKey: ['google-contacts'] });
+      setGoogleBanner('Google Contacts disconnected');
+    },
+  });
+
   const cancelMutation = useMutation({
     mutationFn: (id: string) => whatsappService.cancelMessage(id),
     onSuccess: () => {
@@ -110,6 +166,7 @@ export function WhatsApp() {
 
   const isConnected = connection?.status === 'connected';
   const showQr = connection?.status === 'qr' && connection.qrDataUrl;
+  const googleConnected = !!googleStatus?.connected;
 
   const pendingCount = useMemo(
     () => messages.filter((m) => m.status === 'pending').length,
@@ -140,6 +197,19 @@ export function WhatsApp() {
         </Button>
       </div>
 
+      {googleBanner && (
+        <div className="flex items-start justify-between gap-3 text-sm bg-gray-800 border border-gray-700 rounded-lg p-3 text-gray-200">
+          <span>{googleBanner}</span>
+          <button
+            type="button"
+            className="text-gray-400 hover:text-white"
+            onClick={() => setGoogleBanner(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <Card>
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="flex-1 space-y-4">
@@ -152,7 +222,7 @@ export function WhatsApp() {
                 {isConnected ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
               </div>
               <div>
-                <h2 className="font-semibold text-white">Account connection</h2>
+                <h2 className="font-semibold text-white">WhatsApp connection</h2>
                 <p className="text-sm text-gray-400">
                   {connectionLoading
                     ? 'Checking status...'
@@ -231,6 +301,57 @@ export function WhatsApp() {
                 <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-40" />
                 <p className="text-sm">QR code will appear here</p>
               </div>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div
+              className={`p-2 rounded-lg ${
+                googleConnected ? 'bg-blue-900/40 text-blue-300' : 'bg-gray-700 text-gray-300'
+              }`}
+            >
+              <Contact className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-white">Google Contacts</h2>
+              <p className="text-sm text-gray-400">
+                {googleLoading
+                  ? 'Checking status...'
+                  : !googleStatus?.configured
+                    ? 'Not configured on server (set GOOGLE_CLIENT_ID / SECRET)'
+                    : googleConnected
+                      ? `Connected${googleStatus.email ? ` as ${googleStatus.email}` : ''}`
+                      : 'Connect to pick recipients from your contacts'}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {googleStatus?.configured && !googleConnected && (
+              <Button
+                leftIcon={<Contact className="w-4 h-4" />}
+                onClick={() => googleConnectMutation.mutate()}
+                isLoading={googleConnectMutation.isPending}
+              >
+                Connect Google
+              </Button>
+            )}
+            {googleConnected && (
+              <Button
+                variant="secondary"
+                leftIcon={<Unplug className="w-4 h-4" />}
+                onClick={() => {
+                  if (confirm('Disconnect Google Contacts?')) {
+                    googleDisconnectMutation.mutate();
+                  }
+                }}
+                isLoading={googleDisconnectMutation.isPending}
+              >
+                Disconnect Google
+              </Button>
             )}
           </div>
         </div>
@@ -354,6 +475,9 @@ export function WhatsApp() {
         }}
         message={editing}
         isConnected={!!isConnected}
+        googleConnected={googleConnected}
+        onConnectGoogle={() => googleConnectMutation.mutate()}
+        connectingGoogle={googleConnectMutation.isPending}
       />
     </div>
   );
@@ -364,11 +488,17 @@ function ComposeModal({
   onClose,
   message,
   isConnected,
+  googleConnected,
+  onConnectGoogle,
+  connectingGoogle,
 }: {
   isOpen: boolean;
   onClose: () => void;
   message: ScheduledWhatsAppMessage | null;
   isConnected: boolean;
+  googleConnected: boolean;
+  onConnectGoogle: () => void;
+  connectingGoogle: boolean;
 }) {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
@@ -379,6 +509,7 @@ function ComposeModal({
   });
   const [sendMode, setSendMode] = useState<'schedule' | 'now'>('schedule');
   const [formError, setFormError] = useState<string | null>(null);
+  const [showContacts, setShowContacts] = useState(false);
 
   useEffect(() => {
     if (message) {
@@ -399,6 +530,7 @@ function ComposeModal({
       setSendMode('schedule');
     }
     setFormError(null);
+    setShowContacts(false);
   }, [message, isOpen]);
 
   const createMutation = useMutation({
@@ -477,106 +609,247 @@ function ComposeModal({
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={message ? 'Edit scheduled message' : 'Schedule WhatsApp message'}
-      size="lg"
-    >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Input
-          label="Phone number (with country code)"
-          value={formData.recipientPhone}
-          onChange={(e) => setFormData({ ...formData, recipientPhone: e.target.value })}
-          placeholder="e.g. 919876543210"
-          required
-        />
-
-        <Input
-          label="Recipient name (optional)"
-          value={formData.recipientName}
-          onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
-          placeholder="e.g. Mom"
-        />
-
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Message</label>
-          <textarea
-            value={formData.message}
-            onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-            rows={5}
-            maxLength={4096}
-            required
-            placeholder="Type your WhatsApp message..."
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-y"
-          />
-          <p className="mt-1 text-xs text-gray-500 text-right">
-            {formData.message.length}/4096
-          </p>
-        </div>
-
-        {!message && (
-          <div className="flex gap-2">
-            <button
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={message ? 'Edit scheduled message' : 'Schedule WhatsApp message'}
+        size="lg"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Input
+                label="Phone number (with country code)"
+                value={formData.recipientPhone}
+                onChange={(e) => setFormData({ ...formData, recipientPhone: e.target.value })}
+                placeholder="e.g. 919876543210"
+                required
+              />
+            </div>
+            <Button
               type="button"
-              onClick={() => setSendMode('schedule')}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                sendMode === 'schedule'
-                  ? 'border-primary-500 bg-primary-600/20 text-primary-300'
-                  : 'border-gray-600 text-gray-400 hover:bg-gray-700'
-              }`}
+              variant="secondary"
+              leftIcon={<Contact className="w-4 h-4" />}
+              onClick={() => {
+                if (!googleConnected) {
+                  onConnectGoogle();
+                  return;
+                }
+                setShowContacts(true);
+              }}
+              isLoading={connectingGoogle}
+              className="mb-0"
             >
-              Schedule for later
-            </button>
-            <button
-              type="button"
-              onClick={() => setSendMode('now')}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                sendMode === 'now'
-                  ? 'border-primary-500 bg-primary-600/20 text-primary-300'
-                  : 'border-gray-600 text-gray-400 hover:bg-gray-700'
-              }`}
-            >
-              Send now
-            </button>
+              Contacts
+            </Button>
           </div>
-        )}
 
-        {(message || sendMode === 'schedule') && (
           <Input
-            label="Send at"
-            type="datetime-local"
-            value={formData.scheduledAt}
-            onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
-            required
+            label="Recipient name (optional)"
+            value={formData.recipientName}
+            onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
+            placeholder="e.g. Mom"
           />
-        )}
 
-        {formError && (
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Message</label>
+            <textarea
+              value={formData.message}
+              onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+              rows={5}
+              maxLength={4096}
+              required
+              placeholder="Type your WhatsApp message..."
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-y"
+            />
+            <p className="mt-1 text-xs text-gray-500 text-right">
+              {formData.message.length}/4096
+            </p>
+          </div>
+
+          {!message && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSendMode('schedule')}
+                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  sendMode === 'schedule'
+                    ? 'border-primary-500 bg-primary-600/20 text-primary-300'
+                    : 'border-gray-600 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                Schedule for later
+              </button>
+              <button
+                type="button"
+                onClick={() => setSendMode('now')}
+                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                  sendMode === 'now'
+                    ? 'border-primary-500 bg-primary-600/20 text-primary-300'
+                    : 'border-gray-600 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                Send now
+              </button>
+            </div>
+          )}
+
+          {(message || sendMode === 'schedule') && (
+            <Input
+              label="Send at"
+              type="datetime-local"
+              value={formData.scheduledAt}
+              onChange={(e) => setFormData({ ...formData, scheduledAt: e.target.value })}
+              required
+            />
+          )}
+
+          {formError && (
+            <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-lg p-3">
+              {formError}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" type="button" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              isLoading={isSaving}
+              leftIcon={
+                !message && sendMode === 'now' ? <Send className="w-4 h-4" /> : undefined
+              }
+            >
+              {message
+                ? 'Update'
+                : sendMode === 'now'
+                  ? 'Send now'
+                  : 'Schedule'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <ContactPickerModal
+        isOpen={showContacts}
+        onClose={() => setShowContacts(false)}
+        onSelect={(contact, phone) => {
+          setFormData((prev) => ({
+            ...prev,
+            recipientPhone: phone.phone,
+            recipientName: contact.name,
+          }));
+          setShowContacts(false);
+        }}
+      />
+    </>
+  );
+}
+
+function ContactPickerModal({
+  isOpen,
+  onClose,
+  onSelect,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (contact: GoogleContact, phone: GoogleContact['phones'][0]) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearch('');
+      setDebouncedSearch('');
+      return;
+    }
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search, isOpen]);
+
+  const { data: contacts = [], isLoading, isFetching, error } = useQuery({
+    queryKey: ['google-contacts', debouncedSearch],
+    queryFn: () => googleService.getContacts(debouncedSearch || undefined),
+    enabled: isOpen,
+  });
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Pick a Google contact" size="lg">
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, email, or phone..."
+            className="w-full pl-9 pr-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            autoFocus
+          />
+        </div>
+
+        {error && (
           <div className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-lg p-3">
-            {formError}
+            {(error as { response?: { data?: { error?: { message?: string } } } }).response?.data
+              ?.error?.message || 'Failed to load contacts'}
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            isLoading={isSaving}
-            leftIcon={
-              !message && sendMode === 'now' ? <Send className="w-4 h-4" /> : undefined
-            }
-          >
-            {message
-              ? 'Update'
-              : sendMode === 'now'
-                ? 'Send now'
-                : 'Schedule'}
-          </Button>
+        <div className="max-h-96 overflow-y-auto space-y-2">
+          {isLoading || isFetching ? (
+            <p className="text-center text-gray-400 py-8">Loading contacts...</p>
+          ) : contacts.length === 0 ? (
+            <p className="text-center text-gray-400 py-8">
+              No contacts with phone numbers found.
+            </p>
+          ) : (
+            contacts.map((contact) => (
+              <div
+                key={contact.resourceName || `${contact.name}-${contact.phones[0]?.phone}`}
+                className="rounded-lg border border-gray-700 bg-gray-800/60 p-3"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  {contact.photoUrl ? (
+                    <img
+                      src={contact.photoUrl}
+                      alt=""
+                      className="w-9 h-9 rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-primary-600/30 text-primary-300 flex items-center justify-center font-medium">
+                      {contact.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-medium text-white truncate">{contact.name}</p>
+                    {contact.email && (
+                      <p className="text-xs text-gray-400 truncate">{contact.email}</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5 pl-12">
+                  {contact.phones.map((phone) => (
+                    <button
+                      key={`${contact.resourceName}-${phone.phone}`}
+                      type="button"
+                      onClick={() => onSelect(contact, phone)}
+                      className="text-left px-3 py-2 rounded-lg bg-gray-900/70 hover:bg-primary-600/20 border border-gray-700 hover:border-primary-500 transition-colors"
+                    >
+                      <span className="text-sm text-white">+{phone.phone}</span>
+                      <span className="text-xs text-gray-400 ml-2">
+                        {phone.label || phone.displayPhone}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
         </div>
-      </form>
+      </div>
     </Modal>
   );
 }

@@ -26,4 +26,12 @@ export const config = {
   whatsapp: {
     sessionsDir: process.env.WHATSAPP_SESSIONS_DIR || './whatsapp-sessions',
   },
+
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    redirectUri:
+      process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/google/callback',
+    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  },
 };

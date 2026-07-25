@@ -12,14 +12,19 @@ import {
   Image,
   Platform,
   ActivityIndicator,
+  Linking,
+  AppState,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   whatsappService,
+  googleService,
   ScheduledWhatsAppMessage,
   ScheduledMessageStatus,
+  GoogleContact,
+  GoogleContactPhone,
 } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
 
@@ -78,6 +83,24 @@ export default function WhatsAppScreen() {
     refetchInterval: 15000,
   });
 
+  const {
+    data: googleStatus,
+    isLoading: googleLoading,
+    refetch: refetchGoogle,
+  } = useQuery({
+    queryKey: ['google-status'],
+    queryFn: () => googleService.getStatus(),
+  });
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        queryClient.invalidateQueries({ queryKey: ['google-status'] });
+      }
+    });
+    return () => sub.remove();
+  }, [queryClient]);
+
   const connectMutation = useMutation({
     mutationFn: () => whatsappService.connect(),
     onSuccess: () => {
@@ -95,6 +118,40 @@ export default function WhatsAppScreen() {
     },
     onError: (error: any) => {
       Alert.alert('Error', error.response?.data?.error?.message || 'Failed to disconnect');
+    },
+  });
+
+  const googleConnectMutation = useMutation({
+    mutationFn: () => googleService.getAuthUrl('mobile'),
+    onSuccess: async (url) => {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert('Error', 'Cannot open Google sign-in URL');
+        return;
+      }
+      await Linking.openURL(url);
+      Alert.alert(
+        'Complete sign-in',
+        'Finish Google sign-in in the browser, then return here. Pull to refresh if needed.'
+      );
+    },
+    onError: (error: any) => {
+      Alert.alert(
+        'Error',
+        error.response?.data?.error?.message || 'Failed to start Google sign-in'
+      );
+    },
+  });
+
+  const googleDisconnectMutation = useMutation({
+    mutationFn: () => googleService.disconnect(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['google-status'] });
+      queryClient.removeQueries({ queryKey: ['google-contacts'] });
+      Alert.alert('Disconnected', 'Google Contacts disconnected');
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.response?.data?.error?.message || 'Failed to disconnect Google');
     },
   });
 
@@ -120,6 +177,7 @@ export default function WhatsAppScreen() {
 
   const isConnected = connection?.status === 'connected';
   const showQr = connection?.status === 'qr' && !!connection.qrDataUrl;
+  const googleConnected = !!googleStatus?.connected;
 
   const pendingCount = useMemo(
     () => messages.filter((m) => m.status === 'pending').length,
@@ -143,7 +201,7 @@ export default function WhatsAppScreen() {
   };
 
   const handleRefresh = async () => {
-    await Promise.all([refetchStatus(), refetchMessages()]);
+    await Promise.all([refetchStatus(), refetchMessages(), refetchGoogle()]);
   };
 
   const openCompose = (message?: ScheduledWhatsAppMessage) => {
@@ -353,6 +411,80 @@ export default function WhatsAppScreen() {
         )}
       </View>
 
+      <View style={{ backgroundColor: colors.card }} className="rounded-xl p-4 shadow-sm mb-4">
+        <View className="flex-row items-center mb-3">
+          <View
+            className="w-10 h-10 rounded-full items-center justify-center mr-3"
+            style={{
+              backgroundColor: googleConnected
+                ? isDark
+                  ? '#1e3a8a'
+                  : '#dbeafe'
+                : isDark
+                  ? '#374151'
+                  : '#f3f4f6',
+            }}
+          >
+            <Ionicons
+              name="logo-google"
+              size={22}
+              color={googleConnected ? '#3b82f6' : colors.icon}
+            />
+          </View>
+          <View className="flex-1">
+            <Text style={{ color: colors.text }} className="font-semibold">
+              Google Contacts
+            </Text>
+            <Text style={{ color: colors.textMuted }} className="text-sm">
+              {googleLoading
+                ? 'Checking status...'
+                : !googleStatus?.configured
+                  ? 'Not configured on server'
+                  : googleConnected
+                    ? `Connected${googleStatus.email ? ` as ${googleStatus.email}` : ''}`
+                    : 'Connect to pick message recipients'}
+            </Text>
+          </View>
+        </View>
+        <View className="flex-row flex-wrap gap-2">
+          {googleStatus?.configured && !googleConnected && (
+            <TouchableOpacity
+              className="bg-sky-500 px-4 py-2.5 rounded-xl flex-row items-center"
+              onPress={() => googleConnectMutation.mutate()}
+              disabled={googleConnectMutation.isPending}
+            >
+              {googleConnectMutation.isPending ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Ionicons name="people-outline" size={18} color="white" />
+              )}
+              <Text className="text-white font-medium ml-2">Connect Google</Text>
+            </TouchableOpacity>
+          )}
+          {googleConnected && (
+            <TouchableOpacity
+              className="px-4 py-2.5 rounded-xl"
+              style={{ backgroundColor: isDark ? '#374151' : '#e5e7eb' }}
+              onPress={() =>
+                Alert.alert('Disconnect Google', 'Disconnect Google Contacts?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Disconnect',
+                    style: 'destructive',
+                    onPress: () => googleDisconnectMutation.mutate(),
+                  },
+                ])
+              }
+              disabled={googleDisconnectMutation.isPending}
+            >
+              <Text style={{ color: colors.text }} className="font-medium">
+                Disconnect Google
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       <View className="flex-row items-center justify-between mb-3">
         <Text style={{ color: colors.text }} className="text-lg font-semibold">
           Messages
@@ -444,6 +576,9 @@ export default function WhatsAppScreen() {
         }}
         message={editing}
         isConnected={!!isConnected}
+        googleConnected={googleConnected}
+        onConnectGoogle={() => googleConnectMutation.mutate()}
+        connectingGoogle={googleConnectMutation.isPending}
       />
     </View>
   );
@@ -454,11 +589,17 @@ function ComposeModal({
   onClose,
   message,
   isConnected,
+  googleConnected,
+  onConnectGoogle,
+  connectingGoogle,
 }: {
   visible: boolean;
   onClose: () => void;
   message: ScheduledWhatsAppMessage | null;
   isConnected: boolean;
+  googleConnected: boolean;
+  onConnectGoogle: () => void;
+  connectingGoogle: boolean;
 }) {
   const queryClient = useQueryClient();
   const { isDark, colors } = useTheme();
@@ -469,6 +610,7 @@ function ComposeModal({
   const [sendMode, setSendMode] = useState<'schedule' | 'now'>('schedule');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showContacts, setShowContacts] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -485,6 +627,7 @@ function ComposeModal({
       setScheduledAt(defaultScheduleDate());
       setSendMode('schedule');
     }
+    setShowContacts(false);
   }, [message, visible]);
 
   const createMutation = useMutation({
@@ -562,6 +705,7 @@ function ComposeModal({
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
+    <>
     <Modal visible={visible} animationType="slide" transparent>
       <View className="flex-1 bg-black/50 justify-end">
         <View
@@ -584,19 +728,39 @@ function ComposeModal({
             <Text style={{ color: colors.textSecondary }} className="text-sm mb-1">
               Phone number (with country code)
             </Text>
-            <TextInput
-              value={recipientPhone}
-              onChangeText={setRecipientPhone}
-              placeholder="e.g. 919876543210"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="phone-pad"
-              style={{
-                backgroundColor: isDark ? '#111827' : '#f9fafb',
-                color: colors.text,
-                borderColor: colors.border,
-              }}
-              className="border rounded-xl px-3 py-3 mb-3"
-            />
+            <View className="flex-row gap-2 mb-3">
+              <TextInput
+                value={recipientPhone}
+                onChangeText={setRecipientPhone}
+                placeholder="e.g. 919876543210"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="phone-pad"
+                style={{
+                  backgroundColor: isDark ? '#111827' : '#f9fafb',
+                  color: colors.text,
+                  borderColor: colors.border,
+                }}
+                className="flex-1 border rounded-xl px-3 py-3"
+              />
+              <TouchableOpacity
+                className="px-3 rounded-xl items-center justify-center"
+                style={{ backgroundColor: isDark ? '#374151' : '#e5e7eb' }}
+                onPress={() => {
+                  if (!googleConnected) {
+                    onConnectGoogle();
+                    return;
+                  }
+                  setShowContacts(true);
+                }}
+                disabled={connectingGoogle}
+              >
+                {connectingGoogle ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Ionicons name="people-outline" size={22} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            </View>
 
             <Text style={{ color: colors.textSecondary }} className="text-sm mb-1">
               Recipient name (optional)
@@ -787,6 +951,155 @@ function ComposeModal({
               )}
             </TouchableOpacity>
           </ScrollView>
+        </View>
+      </View>
+    </Modal>
+
+    <ContactPickerModal
+      visible={showContacts}
+      onClose={() => setShowContacts(false)}
+      onSelect={(contact, phone) => {
+        setRecipientPhone(phone.phone);
+        setRecipientName(contact.name);
+        setShowContacts(false);
+      }}
+    />
+    </>
+  );
+}
+
+function ContactPickerModal({
+  visible,
+  onClose,
+  onSelect,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (contact: GoogleContact, phone: GoogleContactPhone) => void;
+}) {
+  const { isDark, colors } = useTheme();
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    if (!visible) {
+      setSearch('');
+      setDebouncedSearch('');
+      return;
+    }
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search, visible]);
+
+  const { data: contacts = [], isLoading, isFetching, error } = useQuery({
+    queryKey: ['google-contacts', debouncedSearch],
+    queryFn: () => googleService.getContacts(debouncedSearch || undefined),
+    enabled: visible,
+  });
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View className="flex-1 bg-black/50 justify-end">
+        <View style={{ backgroundColor: colors.card }} className="rounded-t-3xl max-h-[92%]">
+          <View
+            className="flex-row items-center justify-between p-4 border-b"
+            style={{ borderColor: colors.border }}
+          >
+            <Text style={{ color: colors.text }} className="text-lg font-semibold">
+              Pick a Google contact
+            </Text>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={24} color={colors.icon} />
+            </TouchableOpacity>
+          </View>
+
+          <View className="p-4 pb-2">
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search name, email, or phone..."
+              placeholderTextColor={colors.textMuted}
+              style={{
+                backgroundColor: isDark ? '#111827' : '#f9fafb',
+                color: colors.text,
+                borderColor: colors.border,
+              }}
+              className="border rounded-xl px-3 py-3"
+              autoFocus
+            />
+          </View>
+
+          {error ? (
+            <View className="px-4 pb-2">
+              <Text className="text-red-500 text-sm">
+                {(error as any).response?.data?.error?.message || 'Failed to load contacts'}
+              </Text>
+            </View>
+          ) : null}
+
+          {isLoading || isFetching ? (
+            <View className="py-12 items-center">
+              <ActivityIndicator color={colors.primary} />
+              <Text style={{ color: colors.textMuted }} className="mt-3">
+                Loading contacts...
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={contacts}
+              keyExtractor={(item) => item.resourceName || `${item.name}-${item.phones[0]?.phone}`}
+              contentContainerStyle={{ padding: 16, paddingTop: 8, paddingBottom: 40 }}
+              ListEmptyComponent={
+                <Text style={{ color: colors.textMuted }} className="text-center py-10">
+                  No contacts with phone numbers found.
+                </Text>
+              }
+              renderItem={({ item }) => (
+                <View
+                  className="rounded-xl border p-3 mb-3"
+                  style={{ borderColor: colors.border, backgroundColor: isDark ? '#111827' : '#f9fafb' }}
+                >
+                  <View className="flex-row items-center mb-2">
+                    {item.photoUrl ? (
+                      <Image
+                        source={{ uri: item.photoUrl }}
+                        className="w-9 h-9 rounded-full mr-3"
+                      />
+                    ) : (
+                      <View className="w-9 h-9 rounded-full bg-sky-500/20 items-center justify-center mr-3">
+                        <Text className="text-sky-500 font-semibold">
+                          {item.name.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <View className="flex-1">
+                      <Text style={{ color: colors.text }} className="font-medium">
+                        {item.name}
+                      </Text>
+                      {item.email ? (
+                        <Text style={{ color: colors.textMuted }} className="text-xs">
+                          {item.email}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  {item.phones.map((phone) => (
+                    <TouchableOpacity
+                      key={`${item.resourceName}-${phone.phone}`}
+                      className="rounded-lg px-3 py-2.5 mb-1"
+                      style={{ backgroundColor: isDark ? '#1f2937' : '#ffffff' }}
+                      onPress={() => onSelect(item, phone)}
+                    >
+                      <Text style={{ color: colors.text }}>+{phone.phone}</Text>
+                      <Text style={{ color: colors.textMuted }} className="text-xs">
+                        {phone.label || phone.displayPhone}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            />
+          )}
         </View>
       </View>
     </Modal>

@@ -636,4 +636,52 @@ export const whatsappService = {
   },
 };
 
+// Google Contacts Service
+export interface GoogleConnectionStatus {
+  configured: boolean;
+  connected: boolean;
+  email: string | null;
+  connectedAt: string | null;
+}
+
+export interface GoogleContactPhone {
+  label?: string;
+  phone: string;
+  displayPhone: string;
+}
+
+export interface GoogleContact {
+  resourceName: string;
+  name: string;
+  email?: string;
+  photoUrl?: string;
+  phones: GoogleContactPhone[];
+}
+
+export const googleService = {
+  async getStatus(): Promise<GoogleConnectionStatus> {
+    const response = await api.get('/google/status');
+    return response.data.data;
+  },
+
+  async getAuthUrl(returnTo = 'mobile'): Promise<string> {
+    const response = await api.get('/google/auth-url', {
+      params: { returnTo },
+    });
+    return response.data.data.url;
+  },
+
+  async disconnect(): Promise<GoogleConnectionStatus> {
+    const response = await api.post('/google/disconnect');
+    return response.data.data;
+  },
+
+  async getContacts(q?: string): Promise<GoogleContact[]> {
+    const response = await api.get('/google/contacts', {
+      params: q ? { q } : undefined,
+    });
+    return response.data.data;
+  },
+};
+
 export default api;
