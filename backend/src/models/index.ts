@@ -8,3 +8,8 @@ export { TaxSlab, ITaxSlab, ITaxSlabEntry } from './TaxSlab.js';
 export { UploadSession, IUploadSession, IParsedTransaction } from './UploadSession.js';
 export { Category, ICategory, DEFAULT_CATEGORIES } from './Category.js';
 export { TripExpense, ITripExpense, IExpenseSplit } from './TripExpense.js';
+export {
+  ScheduledWhatsAppMessage,
+  IScheduledWhatsAppMessage,
+  ScheduledMessageStatus,
+} from './ScheduledWhatsAppMessage.js';

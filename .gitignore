@@ -28,6 +28,8 @@ mobile/package.json
 backend/node_modules/
 backend/package-lock.json
 backend/package.json
+backend/whatsapp-sessions/
+backend/uploads/
 
 # Frontend
 frontend/node_modules/

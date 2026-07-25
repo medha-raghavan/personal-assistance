@@ -13,6 +13,7 @@ import {
   TripDetails,
   Tax,
   Categories,
+  WhatsApp,
 } from './pages';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -116,6 +117,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Tax />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/whatsapp"
+          element={
+            <ProtectedRoute>
+              <WhatsApp />
             </ProtectedRoute>
           }
         />

@@ -13,6 +13,10 @@ import taxRoutes from './routes/tax.routes.js';
 import investmentRoutes from './routes/investment.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import categoryRoutes from './routes/category.routes.js';
+import whatsappRoutes from './routes/whatsapp.routes.js';
+import googleRoutes from './routes/google.routes.js';
+import { startMessageScheduler } from './services/messageScheduler.service.js';
+import { restoreSavedSessions } from './services/whatsapp.service.js';
 
 const app = express();
 
@@ -33,15 +37,22 @@ app.use('/api/tax', taxRoutes);
 app.use('/api/investments', investmentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/google', googleRoutes);
 
 app.use(errorHandler);
 
 async function startServer() {
   await connectDatabase();
-  
+
   app.listen(config.port, '0.0.0.0', () => {
     console.log(`🚀 Server running on http://localhost:${config.port}`);
     console.log(`📊 Environment: ${config.nodeEnv}`);
+  });
+
+  startMessageScheduler();
+  restoreSavedSessions().catch((err) => {
+    console.error('[WhatsApp] Session restore error:', err);
   });
 }
 

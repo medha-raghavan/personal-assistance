@@ -22,4 +22,16 @@ export const config = {
     dir: process.env.UPLOAD_DIR || './uploads',
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10485760', 10),
   },
+
+  whatsapp: {
+    sessionsDir: process.env.WHATSAPP_SESSIONS_DIR || './whatsapp-sessions',
+  },
+
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    redirectUri:
+      process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/google/callback',
+    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+  },
 };

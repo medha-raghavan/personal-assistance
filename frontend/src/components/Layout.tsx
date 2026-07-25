@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   Tag,
+  MessageCircle,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -26,6 +27,7 @@ const navItems = [
   { path: '/categories', icon: Tag, label: 'Categories' },
   { path: '/trips', icon: Plane, label: 'Trips' },
   { path: '/tax', icon: Calculator, label: 'Tax' },
+  { path: '/whatsapp', icon: MessageCircle, label: 'WhatsApp' },
 ];
 
 export function Layout({ children }: LayoutProps) {

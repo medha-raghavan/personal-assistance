@@ -1,15 +1,35 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+export interface IGoogleAuth {
+  accessToken?: string;
+  refreshToken?: string;
+  expiryDate?: Date;
+  email?: string;
+  connectedAt?: Date;
+}
+
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   email: string;
   passwordHash: string;
   name: string;
+  google?: IGoogleAuth;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
+
+const googleAuthSchema = new Schema<IGoogleAuth>(
+  {
+    accessToken: { type: String },
+    refreshToken: { type: String },
+    expiryDate: { type: Date },
+    email: { type: String, trim: true, lowercase: true },
+    connectedAt: { type: Date },
+  },
+  { _id: false }
+);
 
 const userSchema = new Schema<IUser>(
   {
@@ -28,6 +48,10 @@ const userSchema = new Schema<IUser>(
       type: String,
       required: true,
       trim: true,
+    },
+    google: {
+      type: googleAuthSchema,
+      required: false,
     },
   },
   {
@@ -50,9 +74,20 @@ userSchema.methods.comparePassword = async function (
 };
 
 userSchema.set('toJSON', {
-  transform: (doc, ret) => {
-    delete ret.passwordHash;
-    return ret;
+  transform: (_doc, ret) => {
+    const obj = ret as unknown as {
+      passwordHash?: string;
+      google?: {
+        accessToken?: string;
+        refreshToken?: string;
+      };
+    };
+    delete obj.passwordHash;
+    if (obj.google) {
+      delete obj.google.accessToken;
+      delete obj.google.refreshToken;
+    }
+    return obj;
   },
 });
 

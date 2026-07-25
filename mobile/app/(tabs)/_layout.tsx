@@ -95,6 +95,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="whatsapp"
+        options={{
+          title: 'WhatsApp',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="logo-whatsapp" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="tax"
         options={{
           title: 'Tax',

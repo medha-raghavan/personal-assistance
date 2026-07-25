@@ -226,6 +226,51 @@ export interface ApiResponse<T> {
   };
 }
 
+export type ScheduledMessageStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'cancelled';
+
+export interface WhatsAppConnectionStatus {
+  status: 'disconnected' | 'connecting' | 'qr' | 'connected';
+  qrDataUrl: string | null;
+  phoneNumber: string | null;
+  lastError: string | null;
+  hasSavedSession: boolean;
+}
+
+export interface ScheduledWhatsAppMessage {
+  _id: string;
+  userId: string;
+  recipientPhone: string;
+  recipientName?: string;
+  message: string;
+  scheduledAt: string;
+  status: ScheduledMessageStatus;
+  sentAt?: string;
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoogleConnectionStatus {
+  configured: boolean;
+  connected: boolean;
+  email: string | null;
+  connectedAt: string | null;
+}
+
+export interface GoogleContactPhone {
+  label?: string;
+  phone: string;
+  displayPhone: string;
+}
+
+export interface GoogleContact {
+  resourceName: string;
+  name: string;
+  email?: string;
+  photoUrl?: string;
+  phones: GoogleContactPhone[];
+}
+
 export interface PaginatedResponse<T> {
   transactions: T[];
   pagination: {

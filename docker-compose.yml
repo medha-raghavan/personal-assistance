@@ -34,8 +34,14 @@ services:
       - JWT_REFRESH_EXPIRES_IN=7d
       - UPLOAD_DIR=/app/uploads
       - MAX_FILE_SIZE=10485760
+      - WHATSAPP_SESSIONS_DIR=/app/whatsapp-sessions
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:3001/api/google/callback}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
     volumes:
       - uploads_data:/app/uploads
+      - whatsapp_sessions:/app/whatsapp-sessions
     networks:
       - finance-network
 
@@ -55,6 +61,7 @@ services:
 volumes:
   mongo_data:
   uploads_data:
+  whatsapp_sessions:
 
 networks:
   finance-network:
