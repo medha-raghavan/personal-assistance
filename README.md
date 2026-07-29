@@ -10,6 +10,7 @@ A self-hosted personal finance application for tracking finances across multiple
 - **Tax Calculator**: Compare Old vs New tax regimes for Indian FY with investment tracking
 - **Interactive Dashboard**: View balances, spending trends, and category breakdowns
 - **Mobile App**: React Native app for Android (iOS coming soon)
+- **Monthly DB Backup**: Cron job dumps MongoDB and emails a gzipped archive once a month
 
 ## Tech Stack
 
@@ -170,6 +171,35 @@ JWT_REFRESH_EXPIRES_IN=7d
 # Upload
 UPLOAD_DIR=./uploads
 MAX_FILE_SIZE=10485760
+
+# Monthly database backup (emailed on the 1st of each month)
+BACKUP_ENABLED=true
+BACKUP_DIR=./backups
+BACKUP_CRON=0 0 1 * *
+BACKUP_EMAIL_TO=you@example.com
+BACKUP_EMAIL_FROM=backups@example.com
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+```
+
+## Monthly Database Backup
+
+When the API starts, a `node-cron` job is scheduled (default: `0 0 1 * *` — midnight on the 1st of every month). It:
+
+1. Exports every MongoDB collection to JSON
+2. Gzips the archive under `BACKUP_DIR`
+3. Emails the archive to `BACKUP_EMAIL_TO` via SMTP
+
+Configure SMTP and `BACKUP_EMAIL_TO` before relying on this in production. Set `BACKUP_ENABLED=false` to disable. Override the schedule with `BACKUP_CRON`.
+
+To run a backup immediately (useful for verifying SMTP):
+
+```bash
+cd backend
+npm run backup:now
 ```
 
 ## Tax Slabs (FY 2025-26)

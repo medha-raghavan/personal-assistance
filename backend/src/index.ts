@@ -16,6 +16,7 @@ import categoryRoutes from './routes/category.routes.js';
 import whatsappRoutes from './routes/whatsapp.routes.js';
 import googleRoutes from './routes/google.routes.js';
 import { startMessageScheduler } from './services/messageScheduler.service.js';
+import { startBackupScheduler } from './services/backupScheduler.service.js';
 import { restoreSavedSessions } from './services/whatsapp.service.js';
 
 const app = express();
@@ -51,6 +52,7 @@ async function startServer() {
   });
 
   startMessageScheduler();
+  startBackupScheduler();
   restoreSavedSessions().catch((err) => {
     console.error('[WhatsApp] Session restore error:', err);
   });
