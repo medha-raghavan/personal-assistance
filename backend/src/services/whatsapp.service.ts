@@ -14,6 +14,8 @@ interface SessionState {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   socket: any;
   reconnectAttempts: number;
+  intentionalDisconnect: boolean;
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const sessions = new Map<string, SessionState>();
@@ -40,10 +42,19 @@ function getOrCreateState(userId: string): SessionState {
       lastError: null,
       socket: null,
       reconnectAttempts: 0,
+      intentionalDisconnect: false,
+      reconnectTimer: null,
     };
     sessions.set(userId, state);
   }
   return state;
+}
+
+function clearReconnectTimer(state: SessionState): void {
+  if (state.reconnectTimer) {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+  }
 }
 
 function hasAuthFiles(userId: string): boolean {
@@ -68,26 +79,78 @@ async function loadBaileys() {
   return import('@whiskeysockets/baileys');
 }
 
+/** Cached WhatsApp Web version — required by Baileys 7+ or connect fails with 405 and no QR. */
+let cachedWaVersion: number[] | null = null;
+let waVersionFetchedAt = 0;
+const WA_VERSION_TTL_MS = 6 * 60 * 60 * 1000;
+
+async function getWaWebVersion(): Promise<number[] | undefined> {
+  const now = Date.now();
+  if (cachedWaVersion && now - waVersionFetchedAt < WA_VERSION_TTL_MS) {
+    return cachedWaVersion;
+  }
+
+  try {
+    const { fetchLatestBaileysVersion } = await loadBaileys();
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+    if (Array.isArray(version) && version.length >= 3) {
+      cachedWaVersion = version;
+      waVersionFetchedAt = now;
+      console.log(
+        `[WhatsApp] Using WA Web version ${version.join('.')}${isLatest ? ' (latest)' : ''}`
+      );
+      return cachedWaVersion;
+    }
+  } catch (err) {
+    console.error('[WhatsApp] Failed to fetch WA Web version:', err);
+  }
+
+  return cachedWaVersion || undefined;
+}
+
 export async function connectWhatsApp(userId: string): Promise<SessionState> {
   const state = getOrCreateState(userId);
+  state.intentionalDisconnect = false;
 
   if (state.status === 'connected' && state.socket) {
     return state;
   }
 
-  if (state.status === 'connecting' || state.status === 'qr') {
+  // Reuse only when we already have a QR ready (user is scanning)
+  if (state.status === 'qr' && state.socket && state.qrDataUrl) {
     return state;
   }
 
+  // Force a fresh socket when stuck in connecting without QR
+  clearReconnectTimer(state);
+  state.reconnectAttempts = 0;
   await startSocket(userId);
   return getOrCreateState(userId);
 }
 
 async function startSocket(userId: string): Promise<void> {
   const state = getOrCreateState(userId);
+  if (state.intentionalDisconnect) {
+    state.status = 'disconnected';
+    return;
+  }
+
+  clearReconnectTimer(state);
   state.status = 'connecting';
   state.qrDataUrl = null;
   state.lastError = null;
+
+  // Tear down any leftover socket before opening a new one
+  if (state.socket) {
+    try {
+      state.socket.ev?.removeAllListeners?.('connection.update');
+      state.socket.ev?.removeAllListeners?.('creds.update');
+      state.socket.end?.(undefined);
+    } catch {
+      // ignore
+    }
+    state.socket = null;
+  }
 
   const baileys = await loadBaileys();
   const {
@@ -98,7 +161,25 @@ async function startSocket(userId: string): Promise<void> {
   } = baileys;
 
   const sessionDir = ensureSessionDir(userId);
+  // Empty/corrupt session dirs (e.g. after a failed disconnect) prevent a clean QR login
+  if (!hasAuthFiles(userId) && fs.existsSync(sessionDir)) {
+    try {
+      for (const name of fs.readdirSync(sessionDir)) {
+        fs.rmSync(path.join(sessionDir, name), { recursive: true, force: true });
+      }
+    } catch (err) {
+      console.error(`[WhatsApp] Failed to clean session dir for ${userId}:`, err);
+    }
+  }
+
   const { state: authState, saveCreds } = await useMultiFileAuthState(sessionDir);
+  const version = await getWaWebVersion();
+  if (!version) {
+    state.status = 'disconnected';
+    state.lastError =
+      'Could not fetch WhatsApp Web version. Check server internet access and try again.';
+    return;
+  }
 
   const socket = makeWASocket({
     auth: authState,
@@ -106,6 +187,7 @@ async function startSocket(userId: string): Promise<void> {
     browser: Browsers.ubuntu('Chrome'),
     markOnlineOnConnect: false,
     syncFullHistory: false,
+    version,
   });
 
   state.socket = socket;
@@ -117,65 +199,95 @@ async function startSocket(userId: string): Promise<void> {
     lastDisconnect?: { error?: { output?: { statusCode?: number }; message?: string } };
     qr?: string;
   }) => {
+    // Ignore events from a superseded socket
+    if (getOrCreateState(userId).socket !== socket) {
+      return;
+    }
+
+    const current = getOrCreateState(userId);
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
       try {
-        state.qrDataUrl = await QRCode.toDataURL(qr, {
+        current.qrDataUrl = await QRCode.toDataURL(qr, {
           margin: 2,
           width: 320,
           color: { dark: '#111827', light: '#ffffff' },
         });
-        state.status = 'qr';
+        current.status = 'qr';
+        current.lastError = null;
       } catch (err) {
-        state.lastError = err instanceof Error ? err.message : 'Failed to generate QR code';
-        state.status = 'disconnected';
+        current.lastError = err instanceof Error ? err.message : 'Failed to generate QR code';
+        current.status = 'disconnected';
       }
     }
 
     if (connection === 'open') {
-      state.status = 'connected';
-      state.qrDataUrl = null;
-      state.reconnectAttempts = 0;
-      state.lastError = null;
+      current.status = 'connected';
+      current.qrDataUrl = null;
+      current.reconnectAttempts = 0;
+      current.lastError = null;
       const user = socket.user;
       if (user?.id) {
-        state.phoneNumber = String(user.id).split(':')[0];
+        current.phoneNumber = String(user.id).split(':')[0];
       }
-      console.log(`[WhatsApp] Connected for user ${userId}${state.phoneNumber ? ` (${state.phoneNumber})` : ''}`);
+      console.log(`[WhatsApp] Connected for user ${userId}${current.phoneNumber ? ` (${current.phoneNumber})` : ''}`);
     }
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
-      const shouldReconnect = !loggedOut && state.reconnectAttempts < 5;
+      // 405 = outdated WA Web version — refresh cache before retrying
+      if (statusCode === 405) {
+        cachedWaVersion = null;
+        waVersionFetchedAt = 0;
+      }
 
-      state.socket = null;
-      state.qrDataUrl = null;
+      current.socket = null;
+      current.qrDataUrl = null;
+
+      if (current.intentionalDisconnect) {
+        current.status = 'disconnected';
+        current.phoneNumber = null;
+        clearReconnectTimer(current);
+        console.log(`[WhatsApp] Intentional disconnect for user ${userId}`);
+        return;
+      }
 
       if (loggedOut) {
-        state.status = 'disconnected';
-        state.phoneNumber = null;
-        state.lastError = 'WhatsApp session logged out. Please connect again.';
+        current.status = 'disconnected';
+        current.phoneNumber = null;
+        current.lastError = 'WhatsApp session logged out. Please connect again.';
+        clearReconnectTimer(current);
         clearSessionFiles(userId);
         console.log(`[WhatsApp] Logged out for user ${userId}`);
         return;
       }
 
+      const shouldReconnect = current.reconnectAttempts < 5;
+
       if (shouldReconnect) {
-        state.reconnectAttempts += 1;
-        state.status = 'connecting';
-        const delay = Math.min(1000 * Math.pow(2, state.reconnectAttempts), 15000);
-        console.log(`[WhatsApp] Reconnecting user ${userId} in ${delay}ms (attempt ${state.reconnectAttempts})`);
-        setTimeout(() => {
+        current.reconnectAttempts += 1;
+        current.status = 'connecting';
+        const delay = Math.min(1000 * Math.pow(2, current.reconnectAttempts), 15000);
+        console.log(
+          `[WhatsApp] Reconnecting user ${userId} in ${delay}ms (attempt ${current.reconnectAttempts}, code=${statusCode ?? 'n/a'})`
+        );
+        clearReconnectTimer(current);
+        current.reconnectTimer = setTimeout(() => {
+          current.reconnectTimer = null;
+          if (current.intentionalDisconnect) {
+            current.status = 'disconnected';
+            return;
+          }
           startSocket(userId).catch((err) => {
-            state.status = 'disconnected';
-            state.lastError = err instanceof Error ? err.message : 'Reconnect failed';
+            current.status = 'disconnected';
+            current.lastError = err instanceof Error ? err.message : 'Reconnect failed';
           });
         }, delay);
       } else {
-        state.status = 'disconnected';
-        state.lastError =
+        current.status = 'disconnected';
+        current.lastError =
           lastDisconnect?.error?.message ||
           'WhatsApp connection closed. Please connect again.';
       }
@@ -186,22 +298,46 @@ async function startSocket(userId: string): Promise<void> {
 function clearSessionFiles(userId: string): void {
   const dir = getSessionDir(userId);
   if (fs.existsSync(dir)) {
-    fs.rmSync(dir, { recursive: true, force: true });
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch (err) {
+      console.error(`[WhatsApp] Failed to clear session files for ${userId}:`, err);
+    }
   }
 }
 
 export async function disconnectWhatsApp(userId: string): Promise<void> {
   const state = sessions.get(userId);
-  if (state?.socket) {
-    try {
-      await state.socket.logout();
-    } catch {
+  if (state) {
+    state.intentionalDisconnect = true;
+    state.reconnectAttempts = 5;
+    clearReconnectTimer(state);
+
+    if (state.socket) {
+      const socket = state.socket;
       try {
-        state.socket.end?.(undefined);
+        socket.ev?.removeAllListeners?.('connection.update');
+        socket.ev?.removeAllListeners?.('creds.update');
       } catch {
         // ignore
       }
+
+      try {
+        await socket.logout();
+      } catch {
+        try {
+          socket.end?.(undefined);
+        } catch {
+          // ignore
+        }
+      }
+      state.socket = null;
     }
+
+    state.status = 'disconnected';
+    state.qrDataUrl = null;
+    state.phoneNumber = null;
+    state.lastError = null;
   }
 
   sessions.delete(userId);
@@ -231,7 +367,11 @@ export async function ensureConnected(userId: string): Promise<boolean> {
     return true;
   }
 
-  if (hasAuthFiles(userId) && state.status === 'disconnected') {
+  if (state.intentionalDisconnect) {
+    return false;
+  }
+
+  if (hasAuthFiles(userId) && (state.status === 'disconnected' || !state.socket)) {
     await connectWhatsApp(userId);
     // Wait briefly for connection to open
     for (let i = 0; i < 20; i++) {

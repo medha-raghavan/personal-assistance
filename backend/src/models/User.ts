@@ -9,12 +9,20 @@ export interface IGoogleAuth {
   connectedAt?: Date;
 }
 
+export interface ITickTickAuth {
+  accessToken?: string;
+  refreshToken?: string;
+  expiryDate?: Date;
+  connectedAt?: Date;
+}
+
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   email: string;
   passwordHash: string;
   name: string;
   google?: IGoogleAuth;
+  ticktick?: ITickTickAuth;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -26,6 +34,16 @@ const googleAuthSchema = new Schema<IGoogleAuth>(
     refreshToken: { type: String },
     expiryDate: { type: Date },
     email: { type: String, trim: true, lowercase: true },
+    connectedAt: { type: Date },
+  },
+  { _id: false }
+);
+
+const ticktickAuthSchema = new Schema<ITickTickAuth>(
+  {
+    accessToken: { type: String },
+    refreshToken: { type: String },
+    expiryDate: { type: Date },
     connectedAt: { type: Date },
   },
   { _id: false }
@@ -53,6 +71,10 @@ const userSchema = new Schema<IUser>(
       type: googleAuthSchema,
       required: false,
     },
+    ticktick: {
+      type: ticktickAuthSchema,
+      required: false,
+    },
   },
   {
     timestamps: true,
@@ -61,7 +83,7 @@ const userSchema = new Schema<IUser>(
 
 userSchema.pre('save', async function (next) {
   if (!this.isModified('passwordHash')) return next();
-  
+
   const salt = await bcrypt.genSalt(12);
   this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
   next();
@@ -81,11 +103,19 @@ userSchema.set('toJSON', {
         accessToken?: string;
         refreshToken?: string;
       };
+      ticktick?: {
+        accessToken?: string;
+        refreshToken?: string;
+      };
     };
     delete obj.passwordHash;
     if (obj.google) {
       delete obj.google.accessToken;
       delete obj.google.refreshToken;
+    }
+    if (obj.ticktick) {
+      delete obj.ticktick.accessToken;
+      delete obj.ticktick.refreshToken;
     }
     return obj;
   },

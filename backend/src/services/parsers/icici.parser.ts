@@ -22,12 +22,17 @@ export class ICICIParser extends BaseParser {
 
       let currentTransaction: Partial<IParsedTransaction> | null = null;
       let descriptionBuffer: string[] = [];
+      let previousBalance: number | undefined;
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
 
         if (line.includes('DATE') && line.includes('PARTICULARS')) {
           continue;
+        }
+
+        if (line.includes('Statement of Transactions')) {
+          previousBalance = undefined;
         }
 
         const dateMatch = line.match(dateRegex);
@@ -43,7 +48,22 @@ export class ICICIParser extends BaseParser {
                 currentTransaction.amount,
                 fullDescription
               );
-              transactions.push(currentTransaction as IParsedTransaction);
+              if (this.isBalanceForward(fullDescription) && (!currentTransaction.amount || currentTransaction.amount === 0)) {
+                if (currentTransaction.balance !== undefined) {
+                  previousBalance = currentTransaction.balance;
+                }
+              } else {
+                currentTransaction.type = this.resolveType(
+                  currentTransaction.amount,
+                  currentTransaction.balance,
+                  previousBalance,
+                  fullDescription
+                );
+                if (currentTransaction.balance !== undefined) {
+                  previousBalance = currentTransaction.balance;
+                }
+                transactions.push(currentTransaction as IParsedTransaction);
+              }
             }
           }
 
@@ -59,12 +79,12 @@ export class ICICIParser extends BaseParser {
 
           if (amounts && amounts.length > 0) {
             const parsedAmounts = amounts.map(a => parseFloat(a.replace(/,/g, '')));
-            
+
             if (parsedAmounts.length >= 2) {
               balance = parsedAmounts[parsedAmounts.length - 1];
-              
+
               const remainingLine = line.substring(dateMatch[0].length);
-              
+
               if (remainingLine.includes('DEPOSITS') || this.isCredit(line)) {
                 amount = parsedAmounts[0];
                 type = 'credit';
@@ -80,7 +100,7 @@ export class ICICIParser extends BaseParser {
 
           const descriptionStart = line.indexOf(dateMatch[0]) + dateMatch[0].length;
           let descriptionPart = line.substring(descriptionStart);
-          
+
           if (amounts && amounts.length > 0) {
             const firstAmountIndex = descriptionPart.indexOf(amounts[0]);
             if (firstAmountIndex > 0) {
@@ -107,8 +127,18 @@ export class ICICIParser extends BaseParser {
             if (!currentTransaction.amount || currentTransaction.amount === 0) {
               const parsedAmounts = amounts.map(a => parseFloat(a.replace(/,/g, '')));
               if (parsedAmounts.length >= 2) {
-                currentTransaction.amount = parsedAmounts[0];
-                currentTransaction.balance = parsedAmounts[parsedAmounts.length - 1];
+                const txAmount = parsedAmounts[0];
+                const txBalance = parsedAmounts[parsedAmounts.length - 1];
+                currentTransaction.amount = txAmount;
+                currentTransaction.balance = txBalance;
+                currentTransaction.type = this.resolveType(
+                  txAmount,
+                  txBalance,
+                  previousBalance,
+                  descriptionBuffer.join(' ')
+                );
+              } else if (parsedAmounts.length === 1 && this.isBalanceForward(descriptionBuffer.join(' '))) {
+                currentTransaction.balance = parsedAmounts[0];
               }
             }
           }
@@ -123,6 +153,12 @@ export class ICICIParser extends BaseParser {
           currentTransaction.compositeKey = this.generateCompositeKey(
             currentTransaction.transactionDate.toISOString().split('T')[0],
             currentTransaction.amount,
+            fullDescription
+          );
+          currentTransaction.type = this.resolveType(
+            currentTransaction.amount,
+            currentTransaction.balance,
+            previousBalance,
             fullDescription
           );
           transactions.push(currentTransaction as IParsedTransaction);
@@ -143,17 +179,46 @@ export class ICICIParser extends BaseParser {
     }
   }
 
+  private isBalanceForward(description: string): boolean {
+    return /^B\/F\b/i.test(description.trim());
+  }
+
+  private resolveType(
+    amount: number,
+    balance: number | undefined,
+    previousBalance: number | undefined,
+    description: string
+  ): 'credit' | 'debit' {
+    if (balance !== undefined && previousBalance !== undefined && amount > 0) {
+      const delta = balance - previousBalance;
+      if (Math.abs(Math.abs(delta) - amount) < 0.02) {
+        return delta > 0 ? 'credit' : 'debit';
+      }
+    }
+    if (this.isCredit(description)) {
+      return 'credit';
+    }
+    return 'debit';
+  }
+
   private isCredit(line: string): boolean {
     const creditIndicators = [
       'NEFTCR',
-      'IMPS',
-      'Int.Pd',
+      'INT.PD',
       'INTEREST',
       'CREDIT',
       'SALARY',
       'REFUND',
+      'TAX REFUND',
+      'CMS/TRF',
     ];
     const upperLine = line.toUpperCase();
-    return creditIndicators.some(indicator => upperLine.includes(indicator));
+    if (creditIndicators.some(indicator => upperLine.includes(indicator))) {
+      return true;
+    }
+    if (/MMT\/IMPS\/.*\/(SALARY|SAL)/i.test(line)) {
+      return true;
+    }
+    return false;
   }
 }

@@ -10,9 +10,10 @@ import {
   LogOut,
   Wallet,
   Menu,
-  X,
   Tag,
   MessageCircle,
+  ChevronDown,
+  Landmark,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -20,15 +21,62 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const navItems = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/transactions', icon: ArrowLeftRight, label: 'Transactions' },
-  { path: '/sections', icon: Layers, label: 'Sections' },
-  { path: '/categories', icon: Tag, label: 'Categories' },
-  { path: '/trips', icon: Plane, label: 'Trips' },
-  { path: '/tax', icon: Calculator, label: 'Tax' },
-  { path: '/whatsapp', icon: MessageCircle, label: 'WhatsApp' },
+type NavLinkItem = {
+  type: 'link';
+  path: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+};
+
+type NavGroupItem = {
+  type: 'group';
+  id: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  children: Array<{
+    path: string;
+    icon: React.ComponentType<{ className?: string }>;
+    label: string;
+  }>;
+};
+
+type NavItem = NavLinkItem | NavGroupItem;
+
+const financePaths = [
+  '/finances',
+  '/transactions',
+  '/sections',
+  '/categories',
+  '/trips',
+  '/tax',
+  '/upload',
 ];
+
+const navItems: NavItem[] = [
+  { type: 'link', path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  {
+    type: 'group',
+    id: 'finances',
+    icon: Landmark,
+    label: 'Finances',
+    children: [
+      { path: '/finances', icon: LayoutDashboard, label: 'Dashboard' },
+      { path: '/transactions', icon: ArrowLeftRight, label: 'Transactions' },
+      { path: '/sections', icon: Layers, label: 'Sections' },
+      { path: '/categories', icon: Tag, label: 'Categories' },
+      { path: '/trips', icon: Plane, label: 'Trips' },
+      { path: '/tax', icon: Calculator, label: 'Tax' },
+    ],
+  },
+  { type: 'link', path: '/whatsapp', icon: MessageCircle, label: 'WhatsApp' },
+];
+
+function isPathActive(pathname: string, path: string): boolean {
+  if (path === '/') {
+    return pathname === '/';
+  }
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
 
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
@@ -36,13 +84,22 @@ export function Layout({ children }: LayoutProps) {
   const queryClient = useQueryClient();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
-  
+
+  const financesActive = financePaths.some((path) => isPathActive(location.pathname, path));
+  const [financesOpen, setFinancesOpen] = React.useState(financesActive);
+
+  React.useEffect(() => {
+    if (financesActive) {
+      setFinancesOpen(true);
+    }
+  }, [financesActive]);
+
   const handleLogout = () => {
     queryClient.clear();
     logout();
     navigate('/login');
   };
-  
+
   return (
     <div className="min-h-screen bg-gray-900 flex">
       <aside
@@ -58,30 +115,85 @@ export function Layout({ children }: LayoutProps) {
           </div>
           <span className="font-bold text-xl text-white">Finance</span>
         </div>
-        
+
         <nav className="p-4 space-y-1">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            if (item.type === 'link') {
+              const isActive = isPathActive(location.pathname, item.path);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`
+                    flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
+                    ${isActive
+                      ? 'bg-primary-600 text-white'
+                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }
+                  `}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span className="font-medium">{item.label}</span>
+                </Link>
+              );
+            }
+
+            const isOpen = item.id === 'finances' ? financesOpen : false;
+
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => setSidebarOpen(false)}
-                className={`
-                  flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
-                  ${isActive
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                  }
-                `}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="font-medium">{item.label}</span>
-              </Link>
+              <div key={item.id} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (item.id === 'finances') {
+                      setFinancesOpen((open) => !open);
+                    }
+                  }}
+                  className={`
+                    w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
+                    ${financesActive
+                      ? 'text-white bg-gray-700/60'
+                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                    }
+                  `}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span className="font-medium flex-1 text-left">{item.label}</span>
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {isOpen && (
+                  <div className="ml-3 pl-3 border-l border-gray-700 space-y-1">
+                    {item.children.map((child) => {
+                      const isActive = isPathActive(location.pathname, child.path);
+                      return (
+                        <Link
+                          key={child.path}
+                          to={child.path}
+                          onClick={() => setSidebarOpen(false)}
+                          className={`
+                            flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm
+                            ${isActive
+                              ? 'bg-primary-600 text-white'
+                              : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                            }
+                          `}
+                        >
+                          <child.icon className="w-4 h-4" />
+                          <span className="font-medium">{child.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
-        
+
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-700">
           <div className="flex items-center gap-3 px-4 py-2">
             <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center">
@@ -103,14 +215,14 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </aside>
-      
+
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      
+
       <div className="flex-1 flex flex-col min-h-screen">
         <header className="sticky top-0 z-30 bg-gray-800 border-b border-gray-700 lg:hidden">
           <div className="flex items-center justify-between px-4 py-3">
@@ -127,7 +239,7 @@ export function Layout({ children }: LayoutProps) {
             <div className="w-10" />
           </div>
         </header>
-        
+
         <main className="flex-1 p-4 sm:p-6 overflow-auto">
           {children}
         </main>

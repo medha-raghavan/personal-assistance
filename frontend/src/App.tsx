@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { Layout } from './components/Layout';
 import {
+  HomeDashboard,
   Dashboard,
   Login,
   Register,
@@ -58,6 +59,14 @@ function App() {
         />
         <Route
           path="/"
+          element={
+            <ProtectedRoute>
+              <HomeDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/finances"
           element={
             <ProtectedRoute>
               <Dashboard />

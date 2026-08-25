@@ -280,6 +280,40 @@ export interface GoogleContact {
   phones: GoogleContactPhone[];
 }
 
+export interface TickTickConnectionStatus {
+  configured: boolean;
+  connected: boolean;
+  connectedAt: string | null;
+}
+
+export interface TickTickWeekTask {
+  id: string;
+  projectId: string;
+  title: string;
+  due?: string;
+  dueLabel?: string;
+  pendingSinceLabel?: string;
+}
+
+export interface TickTickCalendarDay {
+  day: string;
+  date: string;
+  events: string[];
+  flag?: boolean;
+}
+
+export interface TickTickWeekDashboard {
+  weekLabel: string;
+  weekStart: string;
+  weekEnd: string;
+  calendar: TickTickCalendarDay[];
+  doFirst: TickTickWeekTask[];
+  schedule: TickTickWeekTask[];
+  pending: TickTickWeekTask[];
+  nextWeek: TickTickWeekTask[];
+  notes: TickTickWeekTask[];
+}
+
 export interface PaginatedResponse<T> {
   transactions: T[];
   pagination: {

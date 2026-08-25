@@ -15,6 +15,7 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import categoryRoutes from './routes/category.routes.js';
 import whatsappRoutes from './routes/whatsapp.routes.js';
 import googleRoutes from './routes/google.routes.js';
+import ticktickRoutes from './routes/ticktick.routes.js';
 import { startMessageScheduler } from './services/messageScheduler.service.js';
 import { restoreSavedSessions } from './services/whatsapp.service.js';
 
@@ -39,6 +40,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/google', googleRoutes);
+app.use('/api/ticktick', ticktickRoutes);
 
 app.use(errorHandler);
 

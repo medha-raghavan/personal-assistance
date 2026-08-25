@@ -316,6 +316,11 @@ export function WhatsApp() {
                   </p>
                 )}
               </div>
+            ) : connection?.status === 'connecting' ? (
+              <div className="text-center py-8 px-4 text-gray-400">
+                <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-40 animate-pulse" />
+                <p className="text-sm">Connecting… QR will appear shortly</p>
+              </div>
             ) : (
               <div className="text-center py-8 px-4 text-gray-500">
                 <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-40" />

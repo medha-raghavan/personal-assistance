@@ -1,4 +1,4 @@
-export { User, IUser } from './User.js';
+export { User, IUser, IGoogleAuth, ITickTickAuth } from './User.js';
 export { Section, ISection } from './Section.js';
 export { Transaction, ITransaction, ITransactionSplit } from './Transaction.js';
 export { Trip, ITrip, ITripMember } from './Trip.js';
