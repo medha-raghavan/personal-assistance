@@ -38,6 +38,9 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:3001/api/google/callback}
+      - TICKTICK_CLIENT_ID=${TICKTICK_CLIENT_ID:-}
+      - TICKTICK_CLIENT_SECRET=${TICKTICK_CLIENT_SECRET:-}
+      - TICKTICK_REDIRECT_URI=${TICKTICK_REDIRECT_URI:-http://localhost:3001/api/ticktick/callback}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
     volumes:
       - uploads_data:/app/uploads
