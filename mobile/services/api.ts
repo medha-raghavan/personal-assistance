@@ -556,6 +556,7 @@ export const uploadService = {
 
 // WhatsApp Service
 export type ScheduledMessageStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'cancelled';
+export type WhatsAppRecipientType = 'contact' | 'group';
 
 export interface WhatsAppConnectionStatus {
   status: 'disconnected' | 'connecting' | 'qr' | 'connected';
@@ -565,10 +566,18 @@ export interface WhatsAppConnectionStatus {
   hasSavedSession: boolean;
 }
 
+export interface WhatsAppGroup {
+  id: string;
+  name: string;
+  participantCount: number;
+}
+
 export interface ScheduledWhatsAppMessage {
   _id: string;
   userId: string;
-  recipientPhone: string;
+  recipientType?: WhatsAppRecipientType;
+  recipientPhone?: string;
+  recipientJid?: string;
   recipientName?: string;
   message: string;
   scheduledAt: string;
@@ -595,6 +604,11 @@ export const whatsappService = {
     return response.data.data;
   },
 
+  async getGroups(): Promise<WhatsAppGroup[]> {
+    const response = await api.get('/whatsapp/groups');
+    return response.data.data;
+  },
+
   async getMessages(status?: string): Promise<ScheduledWhatsAppMessage[]> {
     const response = await api.get('/whatsapp/messages', {
       params: status && status !== 'all' ? { status } : undefined,
@@ -603,7 +617,9 @@ export const whatsappService = {
   },
 
   async createMessage(data: {
-    recipientPhone: string;
+    recipientType?: WhatsAppRecipientType;
+    recipientPhone?: string;
+    recipientJid?: string;
     recipientName?: string;
     message: string;
     scheduledAt?: string;
@@ -616,7 +632,9 @@ export const whatsappService = {
   async updateMessage(
     id: string,
     data: {
+      recipientType?: WhatsAppRecipientType;
       recipientPhone?: string;
+      recipientJid?: string;
       recipientName?: string;
       message?: string;
       scheduledAt?: string;
@@ -680,6 +698,83 @@ export const googleService = {
     const response = await api.get('/google/contacts', {
       params: q ? { q } : undefined,
     });
+    return response.data.data;
+  },
+};
+
+export interface TickTickConnectionStatus {
+  configured: boolean;
+  connected: boolean;
+  connectedAt: string | null;
+}
+
+export interface TickTickWeekTask {
+  id: string;
+  projectId: string;
+  title: string;
+  due?: string;
+  dueLabel?: string;
+  pendingSinceLabel?: string;
+}
+
+export interface TickTickCalendarDay {
+  day: string;
+  date: string;
+  events: string[];
+  flag?: boolean;
+}
+
+export interface TickTickWeekDashboard {
+  weekLabel: string;
+  weekStart: string;
+  weekEnd: string;
+  calendar: TickTickCalendarDay[];
+  doFirst: TickTickWeekTask[];
+  schedule: TickTickWeekTask[];
+  pending: TickTickWeekTask[];
+  nextWeek: TickTickWeekTask[];
+  notes: TickTickWeekTask[];
+}
+
+export const ticktickService = {
+  async getStatus(): Promise<TickTickConnectionStatus> {
+    const response = await api.get('/ticktick/status');
+    return response.data.data;
+  },
+
+  async getAuthUrl(returnTo = 'mobile'): Promise<string> {
+    const response = await api.get('/ticktick/auth-url', {
+      params: { returnTo },
+    });
+    return response.data.data.url;
+  },
+
+  async disconnect(): Promise<TickTickConnectionStatus> {
+    const response = await api.post('/ticktick/disconnect');
+    return response.data.data;
+  },
+
+  async getWeekDashboard(): Promise<TickTickWeekDashboard> {
+    const response = await api.get('/ticktick/week-dashboard');
+    return response.data.data;
+  },
+
+  async completeTask(projectId: string, taskId: string): Promise<void> {
+    await api.post(
+      `/ticktick/tasks/${encodeURIComponent(projectId)}/${encodeURIComponent(taskId)}/complete`
+    );
+  },
+
+  async createNote(title: string): Promise<TickTickWeekTask> {
+    const response = await api.post('/ticktick/notes', { title });
+    return response.data.data;
+  },
+
+  async updateNote(projectId: string, taskId: string, title: string): Promise<TickTickWeekTask> {
+    const response = await api.put(
+      `/ticktick/notes/${encodeURIComponent(projectId)}/${encodeURIComponent(taskId)}`,
+      { title }
+    );
     return response.data.data;
   },
 };
