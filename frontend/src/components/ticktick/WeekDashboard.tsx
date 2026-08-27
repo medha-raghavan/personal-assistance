@@ -648,13 +648,13 @@ export function WeekDashboard({
           open={open.goals}
           onToggle={toggle}
         >
-          {data.yearlyGoals.length === 0 ? (
+          {(data.yearlyGoals ?? []).length === 0 ? (
             <div style={{ ...mono, color: COLORS.inkSoft, fontSize: 12, padding: '8px 0' }}>
               No goals tagged Goal({new Date().getFullYear()})
             </div>
           ) : (
             <ul className="space-y-4">
-              {data.yearlyGoals.map((goal) => (
+              {(data.yearlyGoals ?? []).map((goal) => (
                 <li key={goal.id}>
                   <div className="flex items-center justify-between gap-3 mb-1.5">
                     <span style={{ ...mono, color: COLORS.ink, fontSize: 13 }}>{goal.title}</span>

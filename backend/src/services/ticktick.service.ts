@@ -329,15 +329,12 @@ async function fetchAllTasks(accessToken: string): Promise<{
   await Promise.all(
     openProjects.map(async (project) => {
       try {
-        const data = await ticktickFetch<{ tasks?: TickTickTask[] }>(
+        const data = await ticktickFetch<{ tasks?: Record<string, unknown>[] }>(
           accessToken,
           `/project/${project.id}/data`
         );
-        for (const task of data?.tasks || []) {
-          tasks.push({
-            ...task,
-            projectId: task.projectId || project.id,
-          });
+        for (const raw of data?.tasks || []) {
+          tasks.push(normalizeTask(raw, project.id));
         }
       } catch (err) {
         console.error(`[TickTick] Failed to load project ${project.id}:`, err);
@@ -346,6 +343,44 @@ async function fetchAllTasks(accessToken: string): Promise<{
   );
 
   return { projects: openProjects, tasks };
+}
+
+function normalizeTask(raw: Record<string, unknown>, fallbackProjectId: string): TickTickTask {
+  const parentId = raw.parentId ?? raw.parent_id;
+  const tags = raw.tags;
+
+  return {
+    id: String(raw.id ?? ''),
+    projectId: String(raw.projectId ?? fallbackProjectId),
+    title: String(raw.title ?? ''),
+    content: raw.content != null ? String(raw.content) : undefined,
+    desc: raw.desc != null ? String(raw.desc) : undefined,
+    priority: Number(raw.priority ?? 0),
+    status: Number(raw.status ?? 0),
+    dueDate: raw.dueDate != null ? String(raw.dueDate) : undefined,
+    startDate: raw.startDate != null ? String(raw.startDate) : undefined,
+    isAllDay: raw.isAllDay === true,
+    timeZone: raw.timeZone != null ? String(raw.timeZone) : undefined,
+    tags: Array.isArray(tags) ? tags.map((tag) => String(tag).trim()) : undefined,
+    parentId: parentId != null && parentId !== '' ? String(parentId) : undefined,
+  };
+}
+
+async function fetchTasksByTag(accessToken: string, tag: string): Promise<TickTickTask[]> {
+  try {
+    const results =
+      (await ticktickFetch<Record<string, unknown>[]>(accessToken, '/task/filter', {
+        method: 'POST',
+        body: JSON.stringify({ tag: [tag] }),
+      })) || [];
+
+    return results.map((raw) =>
+      normalizeTask(raw, String(raw.projectId ?? ''))
+    );
+  } catch (err) {
+    console.error(`[TickTick] Failed to filter tasks by tag "${tag}":`, err);
+    return [];
+  }
 }
 
 function startOfDay(d: Date): Date {
@@ -390,22 +425,42 @@ function isCompleted(task: TickTickTask): boolean {
 }
 
 function hasGoalTag(task: TickTickTask, year: number): boolean {
-  return (task.tags || []).some((tag) => tag.trim() === `Goal(${year})`);
+  const goalTag = `Goal(${year})`;
+  return (task.tags || []).some(
+    (tag) => tag.trim().toLowerCase() === goalTag.toLowerCase()
+  );
 }
 
-function buildYearlyGoals(tasks: TickTickTask[], year: number): WeekDashboardGoal[] {
+function buildYearlyGoals(
+  goalTasks: TickTickTask[],
+  allTasks: TickTickTask[],
+  year: number
+): WeekDashboardGoal[] {
   const childrenByParent = new Map<string, TickTickTask[]>();
 
-  for (const task of tasks) {
+  for (const task of allTasks) {
     if (!task.parentId) continue;
     const siblings = childrenByParent.get(task.parentId) || [];
     siblings.push(task);
     childrenByParent.set(task.parentId, siblings);
   }
 
-  const goals = tasks.filter((task) => !task.parentId && hasGoalTag(task, year));
+  const goalsById = new Map<string, TickTickTask>();
 
-  return goals
+  for (const task of goalTasks) {
+    if (hasGoalTag(task, year)) {
+      goalsById.set(task.id, task);
+    }
+  }
+
+  // Fallback: project/data may include tags on some accounts/responses.
+  for (const task of allTasks) {
+    if (!task.parentId && hasGoalTag(task, year)) {
+      goalsById.set(task.id, task);
+    }
+  }
+
+  return Array.from(goalsById.values())
     .map((goal) => {
       const subtasks = childrenByParent.get(goal.id) || [];
       const total = subtasks.length;
@@ -588,7 +643,9 @@ export async function getWeekDashboard(userId: string): Promise<WeekDashboardPay
   pending.sort(sortByDue);
   nextWeek.sort(sortByDue);
 
-  const yearlyGoals = buildYearlyGoals(tasks, now.getFullYear());
+  const goalTag = `Goal(${now.getFullYear()})`;
+  const taggedGoalTasks = await fetchTasksByTag(accessToken, goalTag);
+  const yearlyGoals = buildYearlyGoals(taggedGoalTasks, tasks, now.getFullYear());
 
   return {
     weekLabel: monthDayLabel(weekStart, weekEnd),
