@@ -13,6 +13,54 @@ import { Transaction, Category, Section } from '../../types';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+const CATEGORY_PALETTE = [
+  '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
+];
+
+function colorForKey(key: string): string {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return CATEGORY_PALETTE[hash % CATEGORY_PALETTE.length];
+}
+
+interface CategoryTotal {
+  key: string;
+  name: string;
+  color: string;
+  credit: number;
+  debit: number;
+  net: number;
+  count: number;
+}
+
+function computeCategoryTotals(txns: Transaction[], categories: Category[]): CategoryTotal[] {
+  const map = new Map<string, CategoryTotal>();
+  for (const t of txns) {
+    const catObj = typeof t.categoryId === 'object' ? (t.categoryId as Category) : categories.find((c) => c._id === t.categoryId);
+    const key = catObj?._id || 'uncategorized';
+    const name = catObj?.name || 'Uncategorized';
+    const color = catObj?.color || colorForKey(key);
+    let entry = map.get(key);
+    if (!entry) {
+      entry = { key, name, color, credit: 0, debit: 0, net: 0, count: 0 };
+      map.set(key, entry);
+    }
+    if (t.type === 'credit') {
+      entry.credit += t.amount;
+    } else {
+      entry.debit += t.amount;
+    }
+    entry.net = entry.credit - entry.debit;
+    entry.count += 1;
+  }
+  return Array.from(map.values()).sort(
+    (a, b) => (b.credit + b.debit) - (a.credit + a.debit)
+  );
+}
+
 function toDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
     date.getDate()
@@ -38,6 +86,7 @@ interface DayCellData {
   debit: number;
   net: number;
   count: number;
+  categoryTotals: CategoryTotal[];
 }
 
 interface TransactionCalendarViewProps {
@@ -110,10 +159,11 @@ export function TransactionCalendarView({
         debit,
         net: credit - debit,
         count: dayTransactions.length,
+        categoryTotals: computeCategoryTotals(dayTransactions, categories),
       });
     }
     return result;
-  }, [year, monthIdx, transactionsByDay, todayKey]);
+  }, [year, monthIdx, transactionsByDay, todayKey, categories]);
 
   const goToPrevMonth = () => onMonthChange(new Date(year, monthIdx - 1, 1));
   const goToNextMonth = () => onMonthChange(new Date(year, monthIdx + 1, 1));
@@ -122,6 +172,10 @@ export function TransactionCalendarView({
   const monthLabel = month.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 
   const selectedDayTransactions = selectedDateKey ? transactionsByDay.get(selectedDateKey) || [] : [];
+  const selectedDayCategoryTotals = useMemo(
+    () => computeCategoryTotals(selectedDayTransactions, categories),
+    [selectedDayTransactions, categories]
+  );
 
   const getCategoryInfo = (categoryId?: string | Category) => {
     if (!categoryId) return null;
@@ -176,12 +230,19 @@ export function TransactionCalendarView({
             <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {cells.map((cell) => {
                 const isSelected = selectedDateKey === cell.dateKey;
+                const visibleCategories = cell.categoryTotals.slice(0, 3);
+                const hiddenCategoryCount = cell.categoryTotals.length - visibleCategories.length;
+                const tooltip = cell.categoryTotals
+                  .map((ct) => `${ct.name}: ${ct.net >= 0 ? '+' : '-'}${formatCurrency(Math.abs(ct.net))}`)
+                  .join('\n');
+
                 return (
                   <button
                     key={cell.dateKey}
                     onClick={() => cell.inCurrentMonth && setSelectedDateKey(cell.dateKey)}
                     disabled={!cell.inCurrentMonth}
-                    className={`relative flex flex-col items-start rounded-lg p-1 sm:p-2 min-h-[52px] sm:min-h-[80px] text-left transition-colors border ${
+                    title={tooltip || undefined}
+                    className={`relative flex flex-col items-start rounded-lg p-1 sm:p-2 min-h-[52px] sm:min-h-[96px] text-left transition-colors border ${
                       !cell.inCurrentMonth
                         ? 'border-transparent cursor-default opacity-0 pointer-events-none'
                         : isSelected
@@ -201,17 +262,40 @@ export function TransactionCalendarView({
                       {cell.date.getDate()}
                     </span>
                     {cell.count > 0 && (
-                      <div className="mt-0.5 sm:mt-1 w-full space-y-0.5">
+                      <div className="mt-0.5 sm:mt-1 w-full space-y-0.5 min-w-0">
+                        {/* Compact net total, shown on mobile where per-category rows don't fit */}
                         <div
-                          className={`text-[9px] sm:text-xs font-semibold truncate ${
+                          className={`sm:hidden text-[9px] font-semibold truncate ${
                             cell.net >= 0 ? 'text-green-400' : 'text-red-400'
                           }`}
                         >
                           {cell.net >= 0 ? '+' : '-'}
                           {formatCompactNumber(Math.abs(cell.net))}
                         </div>
-                        <div className="hidden sm:block text-[10px] text-gray-500">
-                          {cell.count} txn{cell.count !== 1 ? 's' : ''}
+
+                        {/* Category-wise breakdown, shown on larger screens */}
+                        <div className="hidden sm:flex sm:flex-col gap-0.5 w-full">
+                          {visibleCategories.map((ct) => (
+                            <div key={ct.key} className="flex items-center gap-1 min-w-0">
+                              <span
+                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: ct.color }}
+                              />
+                              <span className="text-[10px] text-gray-400 truncate flex-1">{ct.name}</span>
+                              <span
+                                className={`text-[10px] font-medium flex-shrink-0 ${
+                                  ct.net >= 0 ? 'text-green-400' : 'text-red-400'
+                                }`}
+                              >
+                                {formatCompactNumber(Math.abs(ct.net))}
+                              </span>
+                            </div>
+                          ))}
+                          {hiddenCategoryCount > 0 && (
+                            <div className="text-[9px] text-gray-500">
+                              +{hiddenCategoryCount} more
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -237,74 +321,105 @@ export function TransactionCalendarView({
           {selectedDayTransactions.length === 0 ? (
             <p className="text-sm text-gray-400 py-4 text-center">No transactions on this day</p>
           ) : (
-            <div className="space-y-2">
-              {selectedDayTransactions.map((transaction) => {
-                const section = transaction.sectionId as Section;
-                const category = getCategoryInfo(transaction.categoryId);
-                return (
-                  <div
-                    key={transaction._id}
-                    className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-gray-800/60 border border-gray-700"
-                  >
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-xs font-medium text-gray-500 uppercase mb-2">By Category</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {selectedDayCategoryTotals.map((ct) => (
                     <div
-                      className={`p-1 rounded flex-shrink-0 mt-0.5 ${
-                        transaction.type === 'credit'
-                          ? 'bg-green-900/50 text-green-400'
-                          : 'bg-red-900/50 text-red-400'
-                      }`}
+                      key={ct.key}
+                      className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-gray-800/60 border border-gray-700"
                     >
-                      {transaction.type === 'credit' ? (
-                        <ArrowDownLeft className="w-3.5 h-3.5" />
-                      ) : (
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs sm:text-sm text-gray-200 break-words">
-                        {transaction.description}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-1">
-                        <Badge size="sm">{section?.name || 'Unknown'}</Badge>
-                        {category && (
-                          <Badge variant="info" size="sm">
-                            {category.name}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
                       <span
-                        className={`text-xs sm:text-sm font-medium whitespace-nowrap ${
-                          transaction.type === 'credit' ? 'text-green-400' : 'text-red-400'
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: ct.color }}
+                      />
+                      <span className="text-xs text-gray-300 truncate flex-1">
+                        {ct.name}
+                        <span className="text-gray-500"> · {ct.count}</span>
+                      </span>
+                      <span
+                        className={`text-xs font-medium flex-shrink-0 ${
+                          ct.net >= 0 ? 'text-green-400' : 'text-red-400'
                         }`}
                       >
-                        {transaction.type === 'credit' ? '+' : '-'}
-                        {formatCurrency(transaction.amount)}
+                        {ct.net >= 0 ? '+' : '-'}
+                        {formatCurrency(Math.abs(ct.net))}
                       </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => onEdit(transaction)}
-                          className="p-1 text-gray-400 hover:text-primary-400 transition-colors"
-                          title="Edit"
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {selectedDayTransactions.map((transaction) => {
+                  const section = transaction.sectionId as Section;
+                  const category = getCategoryInfo(transaction.categoryId);
+                  return (
+                    <div
+                      key={transaction._id}
+                      className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-gray-800/60 border border-gray-700"
+                    >
+                      <div
+                        className={`p-1 rounded flex-shrink-0 mt-0.5 ${
+                          transaction.type === 'credit'
+                            ? 'bg-green-900/50 text-green-400'
+                            : 'bg-red-900/50 text-red-400'
+                        }`}
+                      >
+                        {transaction.type === 'credit' ? (
+                          <ArrowDownLeft className="w-3.5 h-3.5" />
+                        ) : (
+                          <ArrowUpRight className="w-3.5 h-3.5" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs sm:text-sm text-gray-200 break-words">
+                          {transaction.description}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-1">
+                          <Badge size="sm">{section?.name || 'Unknown'}</Badge>
+                          {category && (
+                            <Badge variant="info" size="sm">
+                              {category.name}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <span
+                          className={`text-xs sm:text-sm font-medium whitespace-nowrap ${
+                            transaction.type === 'credit' ? 'text-green-400' : 'text-red-400'
+                          }`}
                         >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (confirm('Delete this transaction?')) {
-                              onDelete(transaction._id);
-                            }
-                          }}
-                          className="p-1 text-gray-400 hover:text-red-400 transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          {transaction.type === 'credit' ? '+' : '-'}
+                          {formatCurrency(transaction.amount)}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => onEdit(transaction)}
+                            className="p-1 text-gray-400 hover:text-primary-400 transition-colors"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('Delete this transaction?')) {
+                                onDelete(transaction._id);
+                              }
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-400 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
