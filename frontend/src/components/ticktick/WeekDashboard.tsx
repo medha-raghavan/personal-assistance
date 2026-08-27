@@ -645,6 +645,7 @@ export function WeekDashboard({
           bg={COLORS.goalsBg}
           rotate={-0.6}
           tapeLeft="50%"
+          scrollHeight={420}
           open={open.goals}
           onToggle={toggle}
         >
@@ -657,7 +658,16 @@ export function WeekDashboard({
               {(data.yearlyGoals ?? []).map((goal) => (
                 <li key={goal.id}>
                   <div className="flex items-center justify-between gap-3 mb-1.5">
-                    <span style={{ ...mono, color: COLORS.ink, fontSize: 13 }}>{goal.title}</span>
+                    <span
+                      style={{
+                        ...mono,
+                        color: goal.goalCompleted ? COLORS.inkSoft : COLORS.ink,
+                        fontSize: 13,
+                        textDecoration: goal.goalCompleted ? 'line-through' : undefined,
+                      }}
+                    >
+                      {goal.title}
+                    </span>
                     <span style={{ ...mono, color: COLORS.inkSoft, fontSize: 11, flexShrink: 0 }}>
                       {goal.progress}%
                     </span>
