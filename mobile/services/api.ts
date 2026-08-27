@@ -730,6 +730,7 @@ export interface TickTickYearlyGoal {
   progress: number;
   completed: number;
   total: number;
+  goalCompleted: boolean;
 }
 
 export interface TickTickWeekDashboard {
