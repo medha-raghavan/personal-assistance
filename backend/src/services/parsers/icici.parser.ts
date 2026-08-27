@@ -2,6 +2,15 @@ import pdf from 'pdf-parse';
 import { BaseParser, ParserResult } from './base.parser.js';
 import { IParsedTransaction } from '../../models/UploadSession.js';
 
+type ICICIFormat = 'legacy' | 'modern';
+
+interface PendingTransaction {
+  transactionDate: Date;
+  descriptionParts: string[];
+  amount?: number;
+  balance?: number;
+}
+
 export class ICICIParser extends BaseParser {
   constructor(sectionName: string = 'ICICI') {
     super(sectionName);
@@ -14,20 +23,17 @@ export class ICICIParser extends BaseParser {
     try {
       const buffer = Buffer.isBuffer(fileContent) ? fileContent : Buffer.from(fileContent);
       const data = await pdf(buffer);
+      const lines = data.text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
 
-      const lines = data.text.split('\n').map(line => line.trim()).filter(line => line);
-
-      const dateRegex = /^(\d{2})-(\d{2})-(\d{4})/;
-      const amountRegex = /[\d,]+\.\d{2}/g;
-
-      let currentTransaction: Partial<IParsedTransaction> | null = null;
-      let descriptionBuffer: string[] = [];
+      const format = this.detectFormat(data.text);
+      let pending: PendingTransaction | null = null;
       let previousBalance: number | undefined;
 
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        if (line.includes('DATE') && line.includes('PARTICULARS')) {
+      for (const line of lines) {
+        if (this.shouldSkipLine(line)) {
           continue;
         }
 
@@ -35,134 +41,52 @@ export class ICICIParser extends BaseParser {
           previousBalance = undefined;
         }
 
-        const dateMatch = line.match(dateRegex);
-
-        if (dateMatch) {
-          if (currentTransaction && currentTransaction.transactionDate) {
-            const fullDescription = descriptionBuffer.join(' ').trim();
-            if (fullDescription && currentTransaction.amount !== undefined) {
-              currentTransaction.description = fullDescription;
-              currentTransaction.tags = this.extractKeywordsFromDescription(fullDescription);
-              currentTransaction.compositeKey = this.generateCompositeKey(
-                currentTransaction.transactionDate.toISOString().split('T')[0],
-                currentTransaction.amount,
-                fullDescription
-              );
-              if (this.isBalanceForward(fullDescription) && (!currentTransaction.amount || currentTransaction.amount === 0)) {
-                if (currentTransaction.balance !== undefined) {
-                  previousBalance = currentTransaction.balance;
-                }
-              } else {
-                currentTransaction.type = this.resolveType(
-                  currentTransaction.amount,
-                  currentTransaction.balance,
-                  previousBalance,
-                  fullDescription
-                );
-                if (currentTransaction.balance !== undefined) {
-                  previousBalance = currentTransaction.balance;
-                }
-                transactions.push(currentTransaction as IParsedTransaction);
-              }
-            }
+        const dateInfo = this.parseDateLine(line, format);
+        if (dateInfo) {
+          if (pending) {
+            previousBalance = this.finalizeTransaction(
+              pending,
+              previousBalance,
+              transactions
+            );
           }
 
-          const day = parseInt(dateMatch[1], 10);
-          const month = parseInt(dateMatch[2], 10) - 1;
-          const year = parseInt(dateMatch[3], 10);
-          const transactionDate = new Date(year, month, day);
-
-          const amounts = line.match(amountRegex);
-          let amount = 0;
-          let type: 'credit' | 'debit' = 'debit';
-          let balance: number | undefined;
-
-          if (amounts && amounts.length > 0) {
-            const parsedAmounts = amounts.map(a => parseFloat(a.replace(/,/g, '')));
-
-            if (parsedAmounts.length >= 2) {
-              balance = parsedAmounts[parsedAmounts.length - 1];
-
-              const remainingLine = line.substring(dateMatch[0].length);
-
-              if (remainingLine.includes('DEPOSITS') || this.isCredit(line)) {
-                amount = parsedAmounts[0];
-                type = 'credit';
-              } else {
-                amount = parsedAmounts[0];
-                type = 'debit';
-              }
-            } else if (parsedAmounts.length === 1) {
-              amount = parsedAmounts[0];
-              balance = parsedAmounts[0];
-            }
-          }
-
-          const descriptionStart = line.indexOf(dateMatch[0]) + dateMatch[0].length;
-          let descriptionPart = line.substring(descriptionStart);
-
-          if (amounts && amounts.length > 0) {
-            const firstAmountIndex = descriptionPart.indexOf(amounts[0]);
-            if (firstAmountIndex > 0) {
-              descriptionPart = descriptionPart.substring(0, firstAmountIndex);
-            }
-          }
-
-          currentTransaction = {
-            transactionDate,
-            amount,
-            type,
-            isDuplicate: false,
-            balance,
+          pending = {
+            transactionDate: dateInfo.date,
+            descriptionParts: dateInfo.descriptionPrefix ? [dateInfo.descriptionPrefix] : [],
           };
+          continue;
+        }
 
-          descriptionBuffer = [descriptionPart.trim()];
-        } else if (currentTransaction) {
-          const amounts = line.match(amountRegex);
-          if (!amounts || amounts.length === 0) {
-            if (!line.match(/^Page \d+/i) && !line.includes('MS.') && !line.includes('PARTICULARS')) {
-              descriptionBuffer.push(line);
-            }
-          } else {
-            if (!currentTransaction.amount || currentTransaction.amount === 0) {
-              const parsedAmounts = amounts.map(a => parseFloat(a.replace(/,/g, '')));
-              if (parsedAmounts.length >= 2) {
-                const txAmount = parsedAmounts[0];
-                const txBalance = parsedAmounts[parsedAmounts.length - 1];
-                currentTransaction.amount = txAmount;
-                currentTransaction.balance = txBalance;
-                currentTransaction.type = this.resolveType(
-                  txAmount,
-                  txBalance,
-                  previousBalance,
-                  descriptionBuffer.join(' ')
-                );
-              } else if (parsedAmounts.length === 1 && this.isBalanceForward(descriptionBuffer.join(' '))) {
-                currentTransaction.balance = parsedAmounts[0];
-              }
-            }
+        if (!pending) {
+          continue;
+        }
+
+        if (this.isBalanceForwardLine(line)) {
+          pending.descriptionParts.push('B/F');
+          continue;
+        }
+
+        const amounts = this.parseAmountLine(line, pending.descriptionParts);
+        if (amounts) {
+          if (amounts.amount !== undefined) {
+            pending.amount = amounts.amount;
           }
+          pending.balance = amounts.balance;
+          continue;
+        }
+
+        if (pending.amount !== undefined && pending.balance !== undefined) {
+          continue;
+        }
+
+        if (!this.isFooterOrHeaderLine(line)) {
+          pending.descriptionParts.push(line);
         }
       }
 
-      if (currentTransaction && currentTransaction.transactionDate) {
-        const fullDescription = descriptionBuffer.join(' ').trim();
-        if (fullDescription && currentTransaction.amount !== undefined) {
-          currentTransaction.description = fullDescription;
-          currentTransaction.tags = this.extractKeywordsFromDescription(fullDescription);
-          currentTransaction.compositeKey = this.generateCompositeKey(
-            currentTransaction.transactionDate.toISOString().split('T')[0],
-            currentTransaction.amount,
-            fullDescription
-          );
-          currentTransaction.type = this.resolveType(
-            currentTransaction.amount,
-            currentTransaction.balance,
-            previousBalance,
-            fullDescription
-          );
-          transactions.push(currentTransaction as IParsedTransaction);
-        }
+      if (pending) {
+        this.finalizeTransaction(pending, previousBalance, transactions);
       }
 
       return {
@@ -179,8 +103,223 @@ export class ICICIParser extends BaseParser {
     }
   }
 
+  private detectFormat(text: string): ICICIFormat {
+    if (
+      /Cheque Number.*Transaction Remarks/i.test(text) ||
+      /\d+\d{2}\.\d{2}\.\d{4}/.test(text) ||
+      /Withdrawal\s+Amount \(INR\)/i.test(text)
+    ) {
+      return 'modern';
+    }
+    return 'legacy';
+  }
+
+  private parseDateLine(
+    line: string,
+    format: ICICIFormat
+  ): { date: Date; descriptionPrefix?: string } | null {
+    if (format === 'modern') {
+      const spaced = line.match(/^(\d+)\s+(\d{2})\.(\d{2})\.(\d{4})(?:\s+(.*))?$/);
+      if (spaced) {
+        return {
+          date: this.buildDate(parseInt(spaced[2], 10), parseInt(spaced[3], 10), parseInt(spaced[4], 10)),
+          descriptionPrefix: spaced[5]?.trim() || undefined,
+        };
+      }
+
+      const compact = line.match(/^(\d+)(\d{2})\.(\d{2})\.(\d{4})$/);
+      if (compact) {
+        return {
+          date: this.buildDate(parseInt(compact[2], 10), parseInt(compact[3], 10), parseInt(compact[4], 10)),
+        };
+      }
+
+      return null;
+    }
+
+    const legacyOnly = line.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if (legacyOnly) {
+      return {
+        date: this.buildDate(
+          parseInt(legacyOnly[1], 10),
+          parseInt(legacyOnly[2], 10),
+          parseInt(legacyOnly[3], 10)
+        ),
+      };
+    }
+
+    const legacyWithText = line.match(/^(\d{2})-(\d{2})-(\d{4})(.+)$/);
+    if (legacyWithText) {
+      const suffix = legacyWithText[4].trim();
+      if (/^B\/F\b/i.test(suffix)) {
+        return {
+          date: this.buildDate(
+            parseInt(legacyWithText[1], 10),
+            parseInt(legacyWithText[2], 10),
+            parseInt(legacyWithText[3], 10)
+          ),
+          descriptionPrefix: 'B/F',
+        };
+      }
+
+      return {
+        date: this.buildDate(
+          parseInt(legacyWithText[1], 10),
+          parseInt(legacyWithText[2], 10),
+          parseInt(legacyWithText[3], 10)
+        ),
+        descriptionPrefix: suffix,
+      };
+    }
+
+    return null;
+  }
+
+  private buildDate(day: number, month: number, year: number): Date {
+    return new Date(year, month - 1, day);
+  }
+
+  private parseAmountLine(
+    line: string,
+    descriptionParts: string[]
+  ): { amount?: number; balance: number } | null {
+    if (/^TOTAL/i.test(line)) {
+      return null;
+    }
+
+    const cleaned = line.replace(/,/g, '').trim();
+    const parts = cleaned.match(/\d+\.\d{2}/g);
+    if (!parts || parts.length === 0) {
+      return null;
+    }
+
+    const nonAmount = cleaned.replace(/\d+\.\d{2}/g, '').trim();
+    if (nonAmount.length > 0) {
+      return null;
+    }
+
+    if (parts.length >= 2) {
+      return {
+        amount: parseFloat(parts[parts.length - 2]),
+        balance: parseFloat(parts[parts.length - 1]),
+      };
+    }
+
+    const isBalanceForward = descriptionParts.some(part => /^B\/F$/i.test(part.trim()));
+    if (isBalanceForward) {
+      return { balance: parseFloat(parts[0]) };
+    }
+
+    return null;
+  }
+
+  private finalizeTransaction(
+    pending: PendingTransaction,
+    previousBalance: number | undefined,
+    transactions: IParsedTransaction[]
+  ): number | undefined {
+    const description = pending.descriptionParts.join(' ').replace(/\s+/g, ' ').trim();
+
+    if (this.isBalanceForward(description)) {
+      if (pending.balance !== undefined) {
+        return pending.balance;
+      }
+      if (pending.amount !== undefined) {
+        return pending.amount;
+      }
+      return previousBalance;
+    }
+
+    if (!pending.amount || pending.amount <= 0) {
+      return previousBalance;
+    }
+
+    const type = this.resolveType(
+      pending.amount,
+      pending.balance,
+      previousBalance,
+      description
+    );
+
+    const transaction: IParsedTransaction = {
+      transactionDate: pending.transactionDate,
+      amount: pending.amount,
+      type,
+      description,
+      tags: this.extractKeywordsFromDescription(description),
+      compositeKey: this.generateCompositeKey(
+        pending.transactionDate.toISOString().split('T')[0],
+        pending.amount,
+        description
+      ),
+      isDuplicate: false,
+      balance: pending.balance,
+    };
+
+    transactions.push(transaction);
+
+    if (pending.balance !== undefined) {
+      return pending.balance;
+    }
+
+    return previousBalance;
+  }
+
+  private shouldSkipLine(line: string): boolean {
+    if (/^Page \d+/i.test(line)) {
+      return true;
+    }
+    if (/^TOTAL/i.test(line)) {
+      return true;
+    }
+    if (/^S No\.$/.test(line) || line === 'Transaction' || line === 'Date') {
+      return true;
+    }
+    if (line.includes('DATE') && line.includes('PARTICULARS')) {
+      return true;
+    }
+    if (line.includes('Cheque Number') && line.includes('Transaction Remarks')) {
+      return true;
+    }
+    if (/^Withdrawal$|^Deposit$|^Balance$/.test(line)) {
+      return true;
+    }
+    if (/^Amount \(INR\)$/.test(line)) {
+      return true;
+    }
+    if (/^(\d+)$/.test(line) && parseInt(line, 10) <= 20) {
+      return true;
+    }
+    return false;
+  }
+
+  private isFooterOrHeaderLine(line: string): boolean {
+    const markers = [
+      'Never share your OTP',
+      'www.icici',
+      'Dial your Bank',
+      'Please call from',
+      'MS.MEDHA',
+      'MEDHA RAGHAVAN',
+      'Your Base Branch',
+      'Visit www.icicibank.com',
+      'Summary of Accounts',
+      'ACCOUNT DETAILS',
+      'Legends for transactions',
+      'This is a system generated statement',
+      'Team ICICI Bank',
+      'RCHG - Recharge',
+      'Sincerly,',
+    ];
+    return markers.some(marker => line.includes(marker));
+  }
+
+  private isBalanceForwardLine(line: string): boolean {
+    return /^B\/F$/i.test(line.trim());
+  }
+
   private isBalanceForward(description: string): boolean {
-    return /^B\/F\b/i.test(description.trim());
+    return /\bB\/F\b/i.test(description.trim());
   }
 
   private resolveType(
@@ -204,6 +343,8 @@ export class ICICIParser extends BaseParser {
   private isCredit(line: string): boolean {
     const creditIndicators = [
       'NEFTCR',
+      'NEFT-N',
+      'NEFT CR',
       'INT.PD',
       'INTEREST',
       'CREDIT',
@@ -211,6 +352,8 @@ export class ICICIParser extends BaseParser {
       'REFUND',
       'TAX REFUND',
       'CMS/TRF',
+      'BIL/INFT',
+      'MMT/IMPS',
     ];
     const upperLine = line.toUpperCase();
     if (creditIndicators.some(indicator => upperLine.includes(indicator))) {
