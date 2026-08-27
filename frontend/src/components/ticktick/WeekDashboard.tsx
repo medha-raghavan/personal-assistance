@@ -7,6 +7,7 @@ import {
   Utensils,
   CalendarClock,
   StickyNote,
+  Target,
   ChevronDown,
   Circle,
   CheckCircle2,
@@ -34,6 +35,8 @@ const COLORS = {
   nextweekBg: '#F0DCC4',
   notes: '#5B6B72',
   notesBg: '#DCE3E3',
+  goals: '#6B5F8A',
+  goalsBg: '#E4E0F0',
   calendar: '#4A4640',
 };
 
@@ -231,6 +234,7 @@ export function WeekDashboard({
     meal: true,
     nextweek: true,
     notes: true,
+    goals: true,
   });
   const [noteDraft, setNoteDraft] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -632,6 +636,55 @@ export function WeekDashboard({
             </ul>
           </Card>
         </div>
+
+        <Card
+          id="goals"
+          title="Yearly Goals"
+          icon={<Target size={18} />}
+          accent={COLORS.goals}
+          bg={COLORS.goalsBg}
+          rotate={-0.6}
+          tapeLeft="50%"
+          open={open.goals}
+          onToggle={toggle}
+        >
+          {data.yearlyGoals.length === 0 ? (
+            <div style={{ ...mono, color: COLORS.inkSoft, fontSize: 12, padding: '8px 0' }}>
+              No goals tagged Goal({new Date().getFullYear()})
+            </div>
+          ) : (
+            <ul className="space-y-4">
+              {data.yearlyGoals.map((goal) => (
+                <li key={goal.id}>
+                  <div className="flex items-center justify-between gap-3 mb-1.5">
+                    <span style={{ ...mono, color: COLORS.ink, fontSize: 13 }}>{goal.title}</span>
+                    <span style={{ ...mono, color: COLORS.inkSoft, fontSize: 11, flexShrink: 0 }}>
+                      {goal.progress}%
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      height: 6,
+                      borderRadius: 3,
+                      background: 'rgba(43, 38, 34, 0.12)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${goal.progress}%`,
+                        background: COLORS.goals,
+                        borderRadius: 3,
+                        transition: 'width 0.3s ease',
+                      }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
     </div>
   );
