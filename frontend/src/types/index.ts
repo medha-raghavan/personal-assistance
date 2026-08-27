@@ -302,6 +302,14 @@ export interface TickTickCalendarDay {
   flag?: boolean;
 }
 
+export interface TickTickYearlyGoal {
+  id: string;
+  title: string;
+  progress: number;
+  completed: number;
+  total: number;
+}
+
 export interface TickTickWeekDashboard {
   weekLabel: string;
   weekStart: string;
@@ -312,6 +320,7 @@ export interface TickTickWeekDashboard {
   pending: TickTickWeekTask[];
   nextWeek: TickTickWeekTask[];
   notes: TickTickWeekTask[];
+  yearlyGoals: TickTickYearlyGoal[];
 }
 
 export interface PaginatedResponse<T> {

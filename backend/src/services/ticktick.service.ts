@@ -41,6 +41,7 @@ export interface TickTickTask {
   isAllDay?: boolean;
   timeZone?: string;
   tags?: string[];
+  parentId?: string;
 }
 
 export interface WeekDashboardTask {
@@ -60,6 +61,14 @@ export interface WeekCalendarDay {
   flag?: boolean;
 }
 
+export interface WeekDashboardGoal {
+  id: string;
+  title: string;
+  progress: number;
+  completed: number;
+  total: number;
+}
+
 export interface WeekDashboardPayload {
   weekLabel: string;
   weekStart: string;
@@ -70,6 +79,7 @@ export interface WeekDashboardPayload {
   pending: WeekDashboardTask[];
   nextWeek: WeekDashboardTask[];
   notes: WeekDashboardTask[];
+  yearlyGoals: WeekDashboardGoal[];
 }
 
 function assertTickTickConfigured(): void {
@@ -375,6 +385,44 @@ function isIncomplete(task: TickTickTask): boolean {
   return task.status !== 2;
 }
 
+function isCompleted(task: TickTickTask): boolean {
+  return task.status === 2;
+}
+
+function hasGoalTag(task: TickTickTask, year: number): boolean {
+  return (task.tags || []).some((tag) => tag.trim() === `Goal(${year})`);
+}
+
+function buildYearlyGoals(tasks: TickTickTask[], year: number): WeekDashboardGoal[] {
+  const childrenByParent = new Map<string, TickTickTask[]>();
+
+  for (const task of tasks) {
+    if (!task.parentId) continue;
+    const siblings = childrenByParent.get(task.parentId) || [];
+    siblings.push(task);
+    childrenByParent.set(task.parentId, siblings);
+  }
+
+  const goals = tasks.filter((task) => !task.parentId && hasGoalTag(task, year));
+
+  return goals
+    .map((goal) => {
+      const subtasks = childrenByParent.get(goal.id) || [];
+      const total = subtasks.length;
+      const completed = subtasks.filter(isCompleted).length;
+      const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return {
+        id: goal.id,
+        title: goal.title || '(untitled)',
+        progress,
+        completed,
+        total,
+      };
+    })
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+
 function isImportant(task: TickTickTask): boolean {
   return task.priority === 5;
 }
@@ -540,6 +588,8 @@ export async function getWeekDashboard(userId: string): Promise<WeekDashboardPay
   pending.sort(sortByDue);
   nextWeek.sort(sortByDue);
 
+  const yearlyGoals = buildYearlyGoals(tasks, now.getFullYear());
+
   return {
     weekLabel: monthDayLabel(weekStart, weekEnd),
     weekStart: weekStart.toISOString(),
@@ -550,6 +600,7 @@ export async function getWeekDashboard(userId: string): Promise<WeekDashboardPay
     pending,
     nextWeek,
     notes,
+    yearlyGoals,
   };
 }
 
