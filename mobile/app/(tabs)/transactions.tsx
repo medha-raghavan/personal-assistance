@@ -28,6 +28,13 @@ import {
   UploadPreview,
 } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
+import { TransactionCalendarView } from '../../components/transactions/TransactionCalendarView';
+
+function toLocalDateString(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
+}
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-IN', {
@@ -103,6 +110,11 @@ export default function TransactionsScreen() {
     sortOrder: 'desc',
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
   const { data: sections = [] } = useQuery({
     queryKey: ['sections'],
@@ -128,6 +140,24 @@ export default function TransactionsScreen() {
     queryKey: ['transactions', filters],
     queryFn: () => transactionService.getAll(filters),
   });
+
+  const calendarMonthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+  const calendarMonthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+  const calendarFilters: TransactionFilters = {
+    ...filters,
+    page: 1,
+    limit: 1000,
+    startDate: toLocalDateString(calendarMonthStart),
+    endDate: toLocalDateString(calendarMonthEnd),
+  };
+
+  const { data: calendarData, isLoading: isCalendarLoading } = useQuery({
+    queryKey: ['transactions-calendar', calendarFilters],
+    queryFn: () => transactionService.getAll(calendarFilters),
+    enabled: viewMode === 'calendar',
+  });
+
+  const calendarTransactions = calendarData?.transactions || [];
 
   const transactions = data?.transactions || [];
   const rawTotals = data?.totals || { totalCredit: 0, totalDebit: 0, netTotal: 0 };
@@ -325,9 +355,35 @@ export default function TransactionsScreen() {
             color={hasActiveFilters ? '#0ea5e9' : colors.icon}
           />
         </TouchableOpacity>
+        <View className="flex-row rounded-lg p-0.5" style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }}>
+          <TouchableOpacity
+            onPress={() => setViewMode('list')}
+            className="px-2.5 py-1.5 rounded-md"
+            style={viewMode === 'list' ? { backgroundColor: '#0ea5e9' } : {}}
+          >
+            <Ionicons name="list" size={18} color={viewMode === 'list' ? 'white' : colors.icon} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setViewMode('calendar')}
+            className="px-2.5 py-1.5 rounded-md"
+            style={viewMode === 'calendar' ? { backgroundColor: '#0ea5e9' } : {}}
+          >
+            <Ionicons name="calendar" size={18} color={viewMode === 'calendar' ? 'white' : colors.icon} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Transaction List */}
+      {/* Transaction List / Calendar */}
+      {viewMode === 'calendar' ? (
+        <TransactionCalendarView
+          month={calendarMonth}
+          onMonthChange={setCalendarMonth}
+          transactions={calendarTransactions as any}
+          isLoading={isCalendarLoading}
+          onEdit={(tx) => openEditModal(tx as unknown as Transaction)}
+          onDelete={(tx) => deleteMutation.mutate((tx as unknown as Transaction)._id)}
+        />
+      ) : (
       <FlatList
         data={transactions}
         keyExtractor={(item) => item._id}
@@ -377,6 +433,7 @@ export default function TransactionsScreen() {
           ) : null
         }
       />
+      )}
 
       {/* FAB Menu Overlay */}
       {showFabMenu && (
