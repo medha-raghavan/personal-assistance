@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Filter, ArrowUpRight, ArrowDownLeft, Trash2, Edit2, X, ChevronDown, ChevronUp, CheckSquare, Square, Calendar, Tag, FolderOpen, Upload as UploadIcon, FileText, AlertCircle, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Search, Filter, ArrowUpRight, ArrowDownLeft, Trash2, Edit2, X, ChevronDown, ChevronUp, CheckSquare, Square, Calendar, Tag, FolderOpen, Upload as UploadIcon, FileText, AlertCircle, ArrowUp, ArrowDown, List, CalendarDays } from 'lucide-react';
 import { Card, Button, Input, Select, Badge, Modal } from '../components/common';
+import { TransactionCalendarView } from '../components/transactions/TransactionCalendarView';
 import { transactionService, TransactionFilters } from '../services/transaction.service';
 import { sectionService } from '../services/section.service';
 import { categoryService } from '../services/category.service';
@@ -10,6 +11,12 @@ import { uploadService } from '../services/upload.service';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { Transaction, Section, Category, Trip, TripMember, ParsedTransaction } from '../types';
 import { useAuthStore } from '../store/authStore';
+
+function toLocalDateString(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
+}
 
 function formatDateWithYear(dateString: string): string {
   const date = new Date(dateString);
@@ -41,6 +48,11 @@ export function Transactions() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
   
   const { data: sectionsData } = useQuery({
     queryKey: ['sections'],
@@ -60,6 +72,22 @@ export function Transactions() {
   const { data, isLoading } = useQuery({
     queryKey: ['transactions', filters],
     queryFn: () => transactionService.getAll(filters),
+  });
+
+  const calendarMonthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+  const calendarMonthEnd = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+  const calendarFilters: TransactionFilters = {
+    ...filters,
+    page: 1,
+    limit: 1000,
+    startDate: toLocalDateString(calendarMonthStart),
+    endDate: toLocalDateString(calendarMonthEnd),
+  };
+
+  const { data: calendarData, isLoading: isCalendarLoading } = useQuery({
+    queryKey: ['transactions-calendar', calendarFilters],
+    queryFn: () => transactionService.getAll(calendarFilters),
+    enabled: viewMode === 'calendar',
   });
   
   const deleteMutation = useMutation({
@@ -270,6 +298,37 @@ export function Transactions() {
                 <span className="hidden sm:inline ml-1">Clear</span>
               </Button>
             )}
+
+            <div className="flex items-center gap-0.5 bg-gray-700/50 rounded-lg p-0.5 ml-auto sm:ml-0">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                  viewMode === 'list' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+                title="List view"
+              >
+                <List className="w-4 h-4" />
+                <span className="hidden sm:inline">List</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (viewMode !== 'calendar' && filters.startDate) {
+                    const parsed = new Date(filters.startDate);
+                    if (!isNaN(parsed.getTime())) {
+                      setCalendarMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
+                    }
+                  }
+                  setViewMode('calendar');
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                  viewMode === 'calendar' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+                title="Calendar view"
+              >
+                <CalendarDays className="w-4 h-4" />
+                <span className="hidden sm:inline">Calendar</span>
+              </button>
+            </div>
           </div>
         </div>
         
@@ -361,6 +420,21 @@ export function Transactions() {
           </div>
         )}
         
+        {viewMode === 'calendar' ? (
+          <TransactionCalendarView
+            month={calendarMonth}
+            onMonthChange={setCalendarMonth}
+            transactions={calendarData?.transactions || []}
+            isLoading={isCalendarLoading}
+            categories={categories}
+            onEdit={(transaction) => setEditingTransaction(transaction)}
+            onDelete={(id) => {
+              if (confirm('Delete this transaction?')) {
+                deleteMutation.mutate(id);
+              }
+            }}
+          />
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-700/50 border-b border-gray-700">
@@ -548,8 +622,9 @@ export function Transactions() {
             </tbody>
           </table>
         </div>
+        )}
         
-        {pagination && pagination.totalPages > 1 && (
+        {viewMode === 'list' && pagination && pagination.totalPages > 1 && (
           <div className="p-3 sm:p-4 border-t border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
             <p className="text-xs sm:text-sm text-gray-400">
               Page {pagination.page} of {pagination.totalPages} ({pagination.totalCount} total)
