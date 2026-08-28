@@ -12,6 +12,8 @@ interface HDFCRow {
   Balance: string;
 }
 
+const BALANCE_TOLERANCE = 0.02;
+
 export class HDFCParser extends BaseParser {
   constructor(sectionName: string = 'HDFC') {
     super(sectionName);
@@ -78,6 +80,8 @@ export class HDFCParser extends BaseParser {
         }
       }
 
+      this.correctTypesUsingBalanceDeltas(transactions);
+
       return {
         success: true,
         transactions,
@@ -90,6 +94,49 @@ export class HDFCParser extends BaseParser {
         errors: [`Failed to parse file: ${(error as Error).message}`],
       };
     }
+  }
+
+  /**
+   * Older PDF→CSV conversions mislabeled withdrawal vs deposit (UPI=debit,
+   * everything else=credit). Use consecutive closing balances as source of truth.
+   */
+  private correctTypesUsingBalanceDeltas(transactions: IParsedTransaction[]): void {
+    let previousBalance: number | undefined;
+
+    for (const tx of transactions) {
+      if (tx.balance === undefined || tx.balance === null) {
+        continue;
+      }
+
+      if (previousBalance !== undefined && tx.amount > 0) {
+        const delta = tx.balance - previousBalance;
+        const previousAmount = tx.amount;
+        const previousType = tx.type;
+
+        if (Math.abs(delta - tx.amount) <= BALANCE_TOLERANCE) {
+          tx.type = 'credit';
+        } else if (Math.abs(delta + tx.amount) <= BALANCE_TOLERANCE) {
+          tx.type = 'debit';
+        } else if (Math.abs(delta) > BALANCE_TOLERANCE) {
+          tx.amount = Math.abs(delta);
+          tx.type = delta > 0 ? 'credit' : 'debit';
+        }
+
+        if (tx.amount !== previousAmount || tx.type !== previousType) {
+          const dateStr = this.formatDateDDMMYY(tx.transactionDate);
+          tx.compositeKey = this.generateCompositeKey(dateStr, tx.amount, tx.description);
+        }
+      }
+
+      previousBalance = tx.balance;
+    }
+  }
+
+  private formatDateDDMMYY(date: Date): string {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = String(date.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
   }
 
   private parseDateDDMMYY(dateStr: string): Date {
