@@ -35,3 +35,4 @@ backend/uploads/
 frontend/node_modules/
 frontend/package-lock.json
 frontend/package.json
+frontend/tsconfig.tsbuildinfo
