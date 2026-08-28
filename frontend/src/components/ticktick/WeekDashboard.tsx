@@ -658,14 +658,14 @@ export function WeekDashboard({
               {(data.yearlyGoals ?? []).map((goal) => {
                 const done = goal.goalCompleted;
                 return (
-                <li key={goal.id}>
+                <li key={goal.id} className={done ? 'opacity-70' : undefined}>
                   <div className="flex items-center justify-between gap-3 mb-1.5">
                     <span
+                      className={done ? 'line-through' : undefined}
                       style={{
                         ...mono,
                         color: done ? COLORS.inkSoft : COLORS.ink,
                         fontSize: 13,
-                        textDecorationLine: done ? 'line-through' : 'none',
                       }}
                     >
                       {goal.title}
