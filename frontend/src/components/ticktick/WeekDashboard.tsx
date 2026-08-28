@@ -655,15 +655,17 @@ export function WeekDashboard({
             </div>
           ) : (
             <ul className="space-y-4">
-              {(data.yearlyGoals ?? []).map((goal) => (
+              {(data.yearlyGoals ?? []).map((goal) => {
+                const done = goal.goalCompleted;
+                return (
                 <li key={goal.id}>
                   <div className="flex items-center justify-between gap-3 mb-1.5">
                     <span
                       style={{
                         ...mono,
-                        color: goal.goalCompleted ? COLORS.inkSoft : COLORS.ink,
+                        color: done ? COLORS.inkSoft : COLORS.ink,
                         fontSize: 13,
-                        textDecoration: goal.goalCompleted ? 'line-through' : undefined,
+                        textDecorationLine: done ? 'line-through' : 'none',
                       }}
                     >
                       {goal.title}
@@ -691,7 +693,8 @@ export function WeekDashboard({
                     />
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </Card>

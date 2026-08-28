@@ -346,6 +346,12 @@ async function fetchAllTasks(accessToken: string): Promise<{
   return { projects: openProjects, tasks };
 }
 
+function normalizeStatus(value: unknown): number {
+  if (value === 2 || value === '2') return 2;
+  if (value === true) return 2;
+  return 0;
+}
+
 function normalizeTask(raw: Record<string, unknown>, fallbackProjectId: string): TickTickTask {
   const parentId = raw.parentId ?? raw.parent_id;
   const tags = raw.tags;
@@ -357,7 +363,7 @@ function normalizeTask(raw: Record<string, unknown>, fallbackProjectId: string):
     content: raw.content != null ? String(raw.content) : undefined,
     desc: raw.desc != null ? String(raw.desc) : undefined,
     priority: Number(raw.priority ?? 0),
-    status: Number(raw.status ?? 0),
+    status: normalizeStatus(raw.status),
     dueDate: raw.dueDate != null ? String(raw.dueDate) : undefined,
     startDate: raw.startDate != null ? String(raw.startDate) : undefined,
     isAllDay: raw.isAllDay === true,
@@ -365,6 +371,28 @@ function normalizeTask(raw: Record<string, unknown>, fallbackProjectId: string):
     tags: Array.isArray(tags) ? tags.map((tag) => String(tag).trim()) : undefined,
     parentId: parentId != null && parentId !== '' ? String(parentId) : undefined,
   };
+}
+
+async function fetchTasksByFilter(
+  accessToken: string,
+  filter: Record<string, unknown>
+): Promise<TickTickTask[]> {
+  try {
+    const results =
+      (await ticktickFetch<Record<string, unknown>[]>(accessToken, '/task/filter', {
+        method: 'POST',
+        body: JSON.stringify(filter),
+      })) || [];
+
+    const projectId = Array.isArray(filter.projectIds) ? String(filter.projectIds[0]) : '';
+
+    return results
+      .map((raw) => normalizeTask(raw, String(raw.projectId ?? projectId)))
+      .filter((task) => task.id);
+  } catch (err) {
+    console.error('[TickTick] Failed to filter tasks:', err, filter);
+    return [];
+  }
 }
 
 async function fetchTasksByTag(
@@ -375,33 +403,54 @@ async function fetchTasksByTag(
   const merged = new Map<string, TickTickTask>();
 
   for (const status of [0, 2] as const) {
-    try {
-      const body: Record<string, unknown> = { tag: [tag], status: [status] };
-      if (projectId) {
-        body.projectIds = [projectId];
-      }
+    const filter: Record<string, unknown> = { tag: [tag], status: [status] };
+    if (projectId) {
+      filter.projectIds = [projectId];
+    }
 
-      const results =
-        (await ticktickFetch<Record<string, unknown>[]>(accessToken, '/task/filter', {
-          method: 'POST',
-          body: JSON.stringify(body),
-        })) || [];
-
-      for (const raw of results) {
-        const task = normalizeTask(raw, String(raw.projectId ?? projectId ?? ''));
-        if (task.id) {
-          merged.set(task.id, task);
-        }
-      }
-    } catch (err) {
-      const scope = projectId ? `project ${projectId}` : 'all projects';
-      console.error(
-        `[TickTick] Failed to filter tasks by tag "${tag}" (${scope}, status=${status}):`,
-        err
-      );
+    for (const task of await fetchTasksByFilter(accessToken, filter)) {
+      merged.set(task.id, task);
     }
   }
 
+  return Array.from(merged.values());
+}
+
+async function fetchCompletedTasksForProjects(
+  accessToken: string,
+  projects: TickTickProject[]
+): Promise<TickTickTask[]> {
+  const merged = new Map<string, TickTickTask>();
+
+  const projectIds = [
+    ...projects.filter((project) => !project.closed).map((project) => project.id),
+    'inbox',
+  ];
+
+  await Promise.all(
+    projectIds.map(async (projectId) => {
+      const tasks = await fetchTasksByFilter(accessToken, {
+        projectIds: [projectId],
+        status: [2],
+      });
+      for (const task of tasks) {
+        merged.set(task.id, task);
+      }
+    })
+  );
+
+  return Array.from(merged.values());
+}
+
+function mergeTasksById(...taskGroups: TickTickTask[][]): TickTickTask[] {
+  const merged = new Map<string, TickTickTask>();
+  for (const group of taskGroups) {
+    for (const task of group) {
+      if (task.id) {
+        merged.set(task.id, task);
+      }
+    }
+  }
   return Array.from(merged.values());
 }
 
@@ -484,20 +533,22 @@ function hasGoalTag(task: TickTickTask, year: number): boolean {
   );
 }
 
+function isTopLevelGoal(task: TickTickTask, year: number): boolean {
+  return !task.parentId && hasGoalTag(task, year);
+}
+
 function buildYearlyGoals(
-  goalTasks: TickTickTask[],
-  allTasks: TickTickTask[],
+  taggedTasks: TickTickTask[],
+  taskPool: TickTickTask[],
   year: number
 ): WeekDashboardGoal[] {
-  const tasksForHierarchy = new Map<string, TickTickTask>();
-  for (const task of [...allTasks, ...goalTasks]) {
-    if (task.id) {
-      tasksForHierarchy.set(task.id, task);
-    }
+  const tasksById = new Map<string, TickTickTask>();
+  for (const task of mergeTasksById(taggedTasks, taskPool)) {
+    tasksById.set(task.id, task);
   }
 
   const childrenByParent = new Map<string, TickTickTask[]>();
-  for (const task of tasksForHierarchy.values()) {
+  for (const task of tasksById.values()) {
     if (!task.parentId) continue;
     const siblings = childrenByParent.get(task.parentId) || [];
     siblings.push(task);
@@ -505,15 +556,8 @@ function buildYearlyGoals(
   }
 
   const goalsById = new Map<string, TickTickTask>();
-
-  for (const task of goalTasks) {
-    if (hasGoalTag(task, year)) {
-      goalsById.set(task.id, task);
-    }
-  }
-
-  for (const task of allTasks) {
-    if (hasGoalTag(task, year)) {
+  for (const task of tasksById.values()) {
+    if (isTopLevelGoal(task, year)) {
       goalsById.set(task.id, task);
     }
   }
@@ -523,8 +567,8 @@ function buildYearlyGoals(
       const subtasks = childrenByParent.get(goal.id) || [];
       const total = subtasks.length;
       const completedSubtasks = subtasks.filter(isCompleted).length;
-      const progress =
-        total > 0 ? Math.round((completedSubtasks / total) * 100) : isCompleted(goal) ? 100 : 0;
+      const progress = total > 0 ? Math.round((completedSubtasks / total) * 100) : 0;
+      const allSubtasksComplete = total > 0 && completedSubtasks === total;
 
       return {
         id: goal.id,
@@ -532,7 +576,7 @@ function buildYearlyGoals(
         progress,
         completed: completedSubtasks,
         total,
-        goalCompleted: isCompleted(goal),
+        goalCompleted: isCompleted(goal) || allSubtasksComplete,
       };
     })
     .sort((a, b) => {
@@ -709,8 +753,12 @@ export async function getWeekDashboard(userId: string): Promise<WeekDashboardPay
   nextWeek.sort(sortByDue);
 
   const goalTag = `Goal(${now.getFullYear()})`;
-  const taggedGoalTasks = await fetchAllGoalTasks(accessToken, goalTag, projects);
-  const yearlyGoals = buildYearlyGoals(taggedGoalTasks, tasks, now.getFullYear());
+  const [taggedGoalTasks, completedTasks] = await Promise.all([
+    fetchAllGoalTasks(accessToken, goalTag, projects),
+    fetchCompletedTasksForProjects(accessToken, projects),
+  ]);
+  const taskPool = mergeTasksById(tasks, completedTasks);
+  const yearlyGoals = buildYearlyGoals(taggedGoalTasks, taskPool, now.getFullYear());
 
   return {
     weekLabel: monthDayLabel(weekStart, weekEnd),
