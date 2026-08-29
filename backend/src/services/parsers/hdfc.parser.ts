@@ -1,6 +1,12 @@
 import { parse } from 'csv-parse/sync';
 import { BaseParser, ParserResult } from './base.parser.js';
 import { IParsedTransaction } from '../../models/UploadSession.js';
+import {
+  isCreditCardCsvHeaders,
+  parseCreditCardAmount,
+  parseCreditCardDate,
+  resolveCreditCardType,
+} from './hdfc-credit-card.utils.js';
 
 interface HDFCRow {
   Date: string;
@@ -12,6 +18,15 @@ interface HDFCRow {
   Balance: string;
 }
 
+interface HDFCCreditCardRow {
+  Date: string;
+  Description: string;
+  Amount: string;
+  Type?: string;
+  'DR/CR'?: string;
+  'Card Number'?: string;
+}
+
 const BALANCE_TOLERANCE = 0.02;
 
 export class HDFCParser extends BaseParser {
@@ -20,73 +35,23 @@ export class HDFCParser extends BaseParser {
   }
 
   async parse(fileContent: Buffer | string, fileName: string): Promise<ParserResult> {
-    const transactions: IParsedTransaction[] = [];
     const errors: string[] = [];
 
     try {
       const content = Buffer.isBuffer(fileContent) ? fileContent.toString('utf-8') : fileContent;
 
-      const records: HDFCRow[] = parse(content, {
+      const records = parse(content, {
         columns: true,
         skip_empty_lines: true,
         trim: true,
         relax_column_count: true,
-      });
+      }) as Record<string, string>[];
 
-      for (let i = 0; i < records.length; i++) {
-        const row = records[i];
-
-        try {
-          if (!row.Date || !row.Description) {
-            continue;
-          }
-
-          const transactionDate = this.parseDateDDMMYY(row.Date);
-          const valueDate = row['Value Date'] ? this.parseDateDDMMYY(row['Value Date']) : undefined;
-
-          const withdrawal = this.parseAmount(row.Withdrawal);
-          const deposit = this.parseAmount(row.Deposit);
-          const balance = this.parseAmount(row.Balance);
-
-          if (withdrawal === 0 && deposit === 0) {
-            continue;
-          }
-
-          const amount = withdrawal > 0 ? withdrawal : deposit;
-          const type = withdrawal > 0 ? 'debit' : 'credit';
-
-          const compositeKey = this.generateCompositeKey(
-            row.Date,
-            amount,
-            row.Description
-          );
-
-          const tags = this.extractKeywordsFromDescription(row.Description);
-
-          transactions.push({
-            transactionDate,
-            valueDate,
-            amount,
-            type,
-            description: row.Description,
-            reference: row.Reference || undefined,
-            tags,
-            compositeKey,
-            isDuplicate: false,
-            balance,
-          });
-        } catch (rowError) {
-          errors.push(`Row ${i + 2}: ${(rowError as Error).message}`);
-        }
+      if (records.length > 0 && isCreditCardCsvHeaders(Object.keys(records[0]))) {
+        return this.parseCreditCardCsv(records as unknown as HDFCCreditCardRow[], errors);
       }
 
-      this.correctTypesUsingBalanceDeltas(transactions);
-
-      return {
-        success: true,
-        transactions,
-        errors,
-      };
+      return this.parseBankAccountCsv(records as unknown as HDFCRow[], errors);
     } catch (error) {
       return {
         success: false,
@@ -94,6 +59,128 @@ export class HDFCParser extends BaseParser {
         errors: [`Failed to parse file: ${(error as Error).message}`],
       };
     }
+  }
+
+  private parseCreditCardCsv(
+    records: HDFCCreditCardRow[],
+    errors: string[]
+  ): ParserResult {
+    const transactions: IParsedTransaction[] = [];
+
+    for (let i = 0; i < records.length; i++) {
+      const row = records[i];
+
+      try {
+        if (!row.Date || !row.Description) {
+          continue;
+        }
+
+        const amount = parseCreditCardAmount(row.Amount);
+        if (amount === 0) {
+          continue;
+        }
+
+        const transactionDate = parseCreditCardDate(row.Date);
+        const type = resolveCreditCardType(
+          row as unknown as Record<string, string>,
+          {},
+          row.Description
+        );
+
+        const compositeKey = this.generateCompositeKey(
+          row.Date,
+          amount,
+          row.Description
+        );
+
+        const tags = this.extractKeywordsFromDescription(row.Description);
+
+        transactions.push({
+          transactionDate,
+          amount,
+          type,
+          description: row.Description,
+          tags,
+          compositeKey,
+          isDuplicate: false,
+        });
+      } catch (rowError) {
+        errors.push(`Row ${i + 2}: ${(rowError as Error).message}`);
+      }
+    }
+
+    if (transactions.length === 0) {
+      return {
+        success: false,
+        transactions: [],
+        errors: ['No valid transactions found in the file. Please check the file format.', ...errors],
+      };
+    }
+
+    return {
+      success: true,
+      transactions,
+      errors,
+    };
+  }
+
+  private parseBankAccountCsv(records: HDFCRow[], errors: string[]): ParserResult {
+    const transactions: IParsedTransaction[] = [];
+
+    for (let i = 0; i < records.length; i++) {
+      const row = records[i];
+
+      try {
+        if (!row.Date || !row.Description) {
+          continue;
+        }
+
+        const transactionDate = this.parseDateDDMMYY(row.Date);
+        const valueDate = row['Value Date'] ? this.parseDateDDMMYY(row['Value Date']) : undefined;
+
+        const withdrawal = this.parseAmount(row.Withdrawal);
+        const deposit = this.parseAmount(row.Deposit);
+        const balance = this.parseAmount(row.Balance);
+
+        if (withdrawal === 0 && deposit === 0) {
+          continue;
+        }
+
+        const amount = withdrawal > 0 ? withdrawal : deposit;
+        const type = withdrawal > 0 ? 'debit' : 'credit';
+
+        const compositeKey = this.generateCompositeKey(
+          row.Date,
+          amount,
+          row.Description
+        );
+
+        const tags = this.extractKeywordsFromDescription(row.Description);
+
+        transactions.push({
+          transactionDate,
+          valueDate,
+          amount,
+          type,
+          description: row.Description,
+          reference: row.Reference || undefined,
+          tags,
+          compositeKey,
+          isDuplicate: false,
+          balance,
+        });
+      } catch (rowError) {
+        errors.push(`Row ${i + 2}: ${(rowError as Error).message}`);
+      }
+    }
+
+    this.correctTypesUsingBalanceDeltas(transactions);
+
+    return {
+      success: true,
+      transactions,
+      errors,
+    };
   }
 
   /**

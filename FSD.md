@@ -237,7 +237,7 @@ The upload functionality is integrated into the Transactions page via a modal (n
 
 | Format | Extension | Parser | Description |
 |--------|-----------|--------|-------------|
-| HDFC CSV | .csv | hdfc_csv | Standard HDFC bank statement CSV |
+| HDFC CSV | .csv | hdfc_csv | HDFC bank account CSV and HDFC credit card CSV (auto-detected by headers) |
 | HDFC Excel | .xls, .xlsx | hdfc_xls | HDFC credit card and bank statements |
 | ICICI PDF | .pdf | icici_pdf | ICICI bank statement PDF |
 
@@ -252,9 +252,10 @@ Parser selection ignores section configuration and always uses extension-based d
 **Parser Details:**
 
 1. **HDFC CSV Format**
-   - Auto-detects column structure
-   - Parses Date, Narration, Value Date, Debit/Credit amounts
-   - Handles Indian date formats (DD/MM/YYYY)
+   - Auto-detects column structure (bank account vs credit card)
+   - **Bank account**: Date, Narration, Value Date, Withdrawal, Deposit, Balance
+   - **Credit card**: Date, Description, Amount, Type, DR/CR (from PDF conversion or compatible exports)
+   - Handles Indian date formats (DD/MM/YYYY, DD-Mon-YYYY)
 
 2. **HDFC XLS/XLSX Format**
    - Parses binary Excel files (.xls) and modern Excel (.xlsx)

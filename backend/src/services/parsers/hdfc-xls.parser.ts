@@ -1,6 +1,15 @@
 import * as XLSX from 'xlsx';
 import { BaseParser, ParserResult } from './base.parser.js';
 import { IParsedTransaction } from '../../models/UploadSession.js';
+import {
+  CreditCardColumnMap,
+  isCreditCardDate,
+  isCreditCardXlsHeaderRow,
+  mapCreditCardColumns,
+  parseCreditCardAmount,
+  parseCreditCardDate,
+  resolveCreditCardType,
+} from './hdfc-credit-card.utils.js';
 
 export class HDFCXLSParser extends BaseParser {
   constructor(sectionName: string = 'HDFC') {
@@ -32,7 +41,7 @@ export class HDFCXLSParser extends BaseParser {
 
       // Find the header row by looking for specific patterns
       let headerRowIndex = -1;
-      let columnMap: Record<string, number> = {};
+      let columnMap: CreditCardColumnMap & Record<string, number> = {};
 
       for (let i = 0; i < Math.min(rawData.length, 50); i++) {
         const row = rawData[i];
@@ -41,18 +50,9 @@ export class HDFCXLSParser extends BaseParser {
         const rowStr = row.map(cell => String(cell || '').toLowerCase()).join('|');
         
         // HDFC Credit Card format: look for DATE and Description headers
-        if (rowStr.includes('date') && rowStr.includes('description') && rowStr.includes('amt')) {
+        if (isCreditCardXlsHeaderRow(rowStr)) {
           headerRowIndex = i;
-          
-          // Map column indices
-          for (let j = 0; j < row.length; j++) {
-            const cellVal = String(row[j] || '').toLowerCase().trim();
-            if (cellVal === 'date') columnMap.date = j;
-            if (cellVal === 'description') columnMap.description = j;
-            if (cellVal === 'amt' || cellVal === 'amount') columnMap.amount = j;
-            if (cellVal === 'debit / credit' || cellVal === 'dr/cr') columnMap.type = j;
-            if (cellVal === 'transaction type') columnMap.txnType = j;
-          }
+          columnMap = { ...mapCreditCardColumns(row) };
           break;
         }
 
@@ -123,16 +123,23 @@ export class HDFCXLSParser extends BaseParser {
 
       // Process data rows
       const isAccountFormat = columnMap.withdrawal !== undefined || columnMap.deposit !== undefined;
-      
+
       for (let i = headerRowIndex + 1; i < rawData.length; i++) {
         const row = rawData[i];
         if (!row || row.every(cell => cell === null || cell === '')) continue;
 
         try {
-          const dateValue = row[columnMap.date];
-          if (!dateValue || !this.isValidDate(String(dateValue))) continue;
+          const dateValue = row[columnMap.date!];
+          const dateStr = String(dateValue || '');
+          const dateIsValid = isAccountFormat
+            ? this.isValidDate(dateStr)
+            : isCreditCardDate(dateStr);
 
-          const transactionDate = this.parseDate(String(dateValue));
+          if (!dateValue || !dateIsValid) continue;
+
+          const transactionDate = isAccountFormat
+            ? this.parseDate(dateStr)
+            : parseCreditCardDate(dateStr);
           
           // Get description
           let description = '';
@@ -174,13 +181,15 @@ export class HDFCXLSParser extends BaseParser {
             }
           } else {
             // Credit card format with single amount column
-            amount = columnMap.amount !== undefined ? this.parseAmount(row[columnMap.amount]) : 0;
-            
+            amount = columnMap.amount !== undefined
+              ? parseCreditCardAmount(row[columnMap.amount])
+              : 0;
+
             if (amount === 0) {
               // Try to find amount in any column
               for (let j = 0; j < row.length; j++) {
                 if (j !== columnMap.date && j !== columnMap.description) {
-                  const val = this.parseAmount(row[j]);
+                  const val = parseCreditCardAmount(row[j]);
                   if (val > 0) {
                     amount = val;
                     break;
@@ -188,20 +197,10 @@ export class HDFCXLSParser extends BaseParser {
                 }
               }
             }
-            
+
             if (amount === 0) continue;
 
-            // Determine type from Debit/Credit column or description
-            if (columnMap.type !== undefined) {
-              const typeVal = String(row[columnMap.type] || '').toLowerCase();
-              type = typeVal.includes('cr') ? 'credit' : 'debit';
-            } else {
-              // Credit card charges are debits by default, payments/refunds are credits
-              const descLower = description.toLowerCase();
-              if (descLower.includes('payment') || descLower.includes('refund') || descLower.includes('credit') || descLower.includes('reversal')) {
-                type = 'credit';
-              }
-            }
+            type = resolveCreditCardType(row, columnMap, description);
           }
 
           const valueDate = columnMap.valueDate !== undefined && row[columnMap.valueDate] 
