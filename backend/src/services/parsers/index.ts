@@ -2,4 +2,4 @@ export { BaseParser, ParserResult } from './base.parser.js';
 export { HDFCParser } from './hdfc.parser.js';
 export { HDFCXLSParser } from './hdfc-xls.parser.js';
 export { ICICIParser } from './icici.parser.js';
-export * from './hdfc-credit-card.utils.js';
+export * from './hdfc-credit-card-utils.js';

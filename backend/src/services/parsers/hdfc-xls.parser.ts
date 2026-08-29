@@ -9,7 +9,7 @@ import {
   parseCreditCardAmount,
   parseCreditCardDate,
   resolveCreditCardType,
-} from './hdfc-credit-card.utils.js';
+} from './hdfc-credit-card-utils.js';
 
 export class HDFCXLSParser extends BaseParser {
   constructor(sectionName: string = 'HDFC') {

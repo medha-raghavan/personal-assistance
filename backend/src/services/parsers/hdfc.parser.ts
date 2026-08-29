@@ -6,7 +6,7 @@ import {
   parseCreditCardAmount,
   parseCreditCardDate,
   resolveCreditCardType,
-} from './hdfc-credit-card.utils.js';
+} from './hdfc-credit-card-utils.js';
 
 interface HDFCRow {
   Date: string;
