@@ -20,6 +20,7 @@ import {
   showManualEntryPrompt,
   createManualPayment,
 } from '../../services/clipboardParser';
+import { refreshDashboardWidget } from '../../services/widgetRefresh';
 
 export default function SettingsScreen() {
   const { user, logout } = useAuthStore();
@@ -210,6 +211,45 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Home Screen Widget (Android Only) */}
+        {Platform.OS === 'android' && (
+          <>
+            <Text style={{ color: colors.textSecondary }} className="text-sm font-medium mb-2 ml-1">
+              HOME SCREEN WIDGET
+            </Text>
+            <View style={{ backgroundColor: colors.card }} className="rounded-xl shadow-sm mb-4">
+              <View className="flex-row items-center p-4 border-b" style={{ borderColor: colors.border }}>
+                <View className="w-10 h-10 bg-sky-100 rounded-full items-center justify-center">
+                  <Ionicons name="grid-outline" size={22} color="#0ea5e9" />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text style={{ color: colors.text }} className="font-medium">Dashboard Widget</Text>
+                  <Text style={{ color: colors.textMuted }} className="text-xs">
+                    Long-press home screen → Widgets → My Assistant Dashboard
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                className="flex-row items-center p-4"
+                onPress={() => {
+                  refreshDashboardWidget()
+                    .then(() => Alert.alert('Widget Updated', 'Your home screen widget has been refreshed.'))
+                    .catch(() => Alert.alert('Update Failed', 'Open the app while logged in, then try again.'));
+                }}
+              >
+                <View className="w-10 h-10 bg-indigo-100 rounded-full items-center justify-center">
+                  <Ionicons name="refresh-outline" size={22} color="#6366f1" />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text style={{ color: colors.text }} className="font-medium">Refresh Widget</Text>
+                  <Text style={{ color: colors.textMuted }} className="text-xs">Sync latest balance and monthly stats</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         {/* Auto-Detection Settings (Android Only) */}
         {Platform.OS === 'android' && (

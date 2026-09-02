@@ -7,7 +7,8 @@ import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import { ThemeProvider } from '../components/ThemeProvider';
 import { QuickAddOverlay } from '../components/QuickAddOverlay';
-import { initializeSmsListener, stopSmsListener, isSmsListenerAvailable } from '../services/smsListener';
+import { initializeSmsListener, stopSmsListener } from '../services/smsListener';
+import { refreshDashboardWidget } from '../services/widgetRefresh';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +39,7 @@ function RootLayoutContent() {
           console.log('SMS listener initialized successfully');
         }
       });
+      refreshDashboardWidget().catch(() => undefined);
     } else {
       stopSmsListener();
     }

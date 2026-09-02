@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
+import { refreshDashboardWidget } from '../services/widgetRefresh';
 
 interface User {
   id: string;
@@ -40,6 +41,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           isAuthenticated: true,
           isLoading: false,
         });
+        refreshDashboardWidget().catch(() => undefined);
       } else {
         set({ isLoading: false });
       }
@@ -60,6 +62,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       refreshToken,
       isAuthenticated: true,
     });
+
+    refreshDashboardWidget().catch(() => undefined);
   },
 
   logout: async () => {
@@ -73,5 +77,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       refreshToken: null,
       isAuthenticated: false,
     });
+
+    refreshDashboardWidget().catch(() => undefined);
   },
 }));

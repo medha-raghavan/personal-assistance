@@ -98,6 +98,21 @@ Or use the URL from the build output.
 
 ---
 
+## Home Screen Widget (Android)
+
+After installing the app, add the dashboard widget:
+
+1. Long-press your Android home screen
+2. Tap **Widgets**
+3. Find **My Assistant Dashboard**
+4. Drag it onto your home screen
+
+The widget shows total balance, monthly income/expense, and net savings. It refreshes when you open the app or pull to refresh on the Dashboard tab. You can also tap **Settings → Refresh Widget**.
+
+Requires a new EAS build (widgets are not supported in Expo Go).
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |

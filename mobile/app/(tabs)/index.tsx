@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import {
   transactionService,
 } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
+import { refreshDashboardWidget } from '../../services/widgetRefresh';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -217,8 +218,15 @@ export default function DashboardScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await Promise.all([refetchOverview(), refetchFiltered()]);
+    await refreshDashboardWidget().catch(() => undefined);
     setRefreshing(false);
   }, [refetchOverview, refetchFiltered]);
+
+  useEffect(() => {
+    if (overview) {
+      refreshDashboardWidget().catch(() => undefined);
+    }
+  }, [overview]);
 
   const resetFilters = () => {
     setSelectedPeriod('this_month');
