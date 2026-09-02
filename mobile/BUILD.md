@@ -117,6 +117,7 @@ Requires a new EAS build (widgets are not supported in Expo Go).
 
 | Issue | Solution |
 |-------|----------|
+| `npm ci` failed during EAS build | Ensure `mobile/.npmrc` and `mobile/package-lock.json` are committed. The project uses `legacy-peer-deps=true` because the widget library targets Expo 54+ while this app uses Expo 53. |
 | `package.json does not exist in .../build/mobile` | Ensure `mobile/package.json` is committed to git (not gitignored). Run builds from the `mobile/` directory: `cd mobile && eas build ...` |
 | `ENOENT .../mobile/android/gradlew` | Do not commit a partial `android/` folder. It is gitignored; EAS runs `expo prebuild` to generate it. Remove any tracked android files: `git rm -r --cached mobile/android` then commit and rebuild. |
 | Metro errors | `npx expo start --clear` |
