@@ -85,6 +85,10 @@ export const transactionService = {
       categoryId?: string | null;
       tags?: string[];
       tagAction?: 'add' | 'remove' | 'replace';
+      tripId?: string | null;
+      tripMemberIds?: string[];
+      paidByMemberId?: string;
+      paidByMemberName?: string;
     }
   ): Promise<{ modifiedCount: number }> {
     const response = await api.put<ApiResponse<{ modifiedCount: number }>>(

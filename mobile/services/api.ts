@@ -272,13 +272,17 @@ export const transactionService = {
     return response.data.data;
   },
 
-  async bulkUpdate(ids: string[], updates: {
-    date?: string;
+  async bulkUpdate(transactionIds: string[], updates: {
+    transactionDate?: string;
     categoryId?: string | null;
-    tagsAction?: 'add' | 'remove' | 'replace';
     tags?: string[];
+    tagAction?: 'add' | 'remove' | 'replace';
+    tripId?: string | null;
+    tripMemberIds?: string[];
+    paidByMemberId?: string;
+    paidByMemberName?: string;
   }) {
-    const response = await api.put('/transactions/bulk/update', { ids, ...updates });
+    const response = await api.put('/transactions/bulk/update', { transactionIds, updates });
     return response.data.data;
   },
 

@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Filter, ArrowUpRight, ArrowDownLeft, Trash2, Edit2, X, ChevronDown, ChevronUp, CheckSquare, Square, Calendar, Tag, FolderOpen, Upload as UploadIcon, FileText, AlertCircle, ArrowUp, ArrowDown, List, CalendarDays } from 'lucide-react';
+import { Plus, Search, Filter, ArrowUpRight, ArrowDownLeft, Trash2, Edit2, X, ChevronDown, ChevronUp, CheckSquare, Square, Calendar, Tag, FolderOpen, Upload as UploadIcon, FileText, AlertCircle, ArrowUp, ArrowDown, List, CalendarDays, MapPin } from 'lucide-react';
 import { Card, Button, Input, Select, Badge, Modal } from '../components/common';
 import { TransactionCalendarView } from '../components/transactions/TransactionCalendarView';
 import { transactionService, TransactionFilters } from '../services/transaction.service';
@@ -676,6 +676,7 @@ export function Transactions() {
         selectedCount={selectedIds.size}
         selectedIds={Array.from(selectedIds)}
         categories={categories}
+        trips={trips}
         onSuccess={() => {
           setSelectedIds(new Set());
           setShowBulkEditModal(false);
@@ -1045,6 +1046,7 @@ function BulkEditModal({
   selectedCount,
   selectedIds,
   categories,
+  trips,
   onSuccess,
 }: {
   isOpen: boolean;
@@ -1052,15 +1054,55 @@ function BulkEditModal({
   selectedCount: number;
   selectedIds: string[];
   categories: Category[];
+  trips: Trip[];
   onSuccess: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'date' | 'category' | 'tags'>('date');
+  const { user } = useAuthStore();
+  const [activeTab, setActiveTab] = useState<'date' | 'category' | 'tags' | 'trip'>('date');
   const [date, setDate] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [clearCategory, setClearCategory] = useState(false);
   const [tags, setTags] = useState('');
   const [tagAction, setTagAction] = useState<'add' | 'remove' | 'replace'>('add');
+  const [tripId, setTripId] = useState('');
+  const [unlinkTrip, setUnlinkTrip] = useState(false);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [paidByMemberId, setPaidByMemberId] = useState('');
+
+  const findCurrentUserMember = (trip: Trip): TripMember | undefined => {
+    if (!user) return undefined;
+    const userName = user.name.toLowerCase();
+    const userEmail = user.email.toLowerCase();
+    return trip.members.find((member) => {
+      const memberName = member.name.toLowerCase();
+      const memberEmail = member.email?.toLowerCase() || '';
+      return memberName === userName || memberEmail === userEmail;
+    });
+  };
+
+  const selectedTrip = tripId ? trips.find((trip) => trip._id === tripId) : undefined;
+
+  const handleTripChange = (value: string) => {
+    setUnlinkTrip(false);
+    setTripId(value);
+    const trip = trips.find((t) => t._id === value);
+    if (trip) {
+      const memberIds = trip.members.map((member) => member._id!);
+      const currentUserMember = findCurrentUserMember(trip);
+      setSelectedMemberIds(memberIds);
+      setPaidByMemberId(currentUserMember?._id || trip.members[0]?._id || '');
+    } else {
+      setSelectedMemberIds([]);
+      setPaidByMemberId('');
+    }
+  };
+
+  const toggleMember = (memberId: string) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
+    );
+  };
 
   const bulkUpdateMutation = useMutation({
     mutationFn: () => {
@@ -1069,6 +1111,10 @@ function BulkEditModal({
         categoryId?: string | null;
         tags?: string[];
         tagAction?: 'add' | 'remove' | 'replace';
+        tripId?: string | null;
+        tripMemberIds?: string[];
+        paidByMemberId?: string;
+        paidByMemberName?: string;
       } = {};
 
       if (activeTab === 'date' && date) {
@@ -1078,6 +1124,18 @@ function BulkEditModal({
       } else if (activeTab === 'tags' && tags.trim()) {
         updates.tags = tags.split(',').map(t => t.trim()).filter(Boolean);
         updates.tagAction = tagAction;
+      } else if (activeTab === 'trip') {
+        if (unlinkTrip) {
+          updates.tripId = null;
+        } else if (tripId) {
+          updates.tripId = tripId;
+          if (selectedMemberIds.length > 0) {
+            updates.tripMemberIds = selectedMemberIds;
+            updates.paidByMemberId = paidByMemberId;
+            const payer = selectedTrip?.members.find((member) => member._id === paidByMemberId);
+            updates.paidByMemberName = payer?.name;
+          }
+        }
       }
 
       return transactionService.bulkUpdate(selectedIds, updates);
@@ -1085,10 +1143,18 @@ function BulkEditModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      queryClient.invalidateQueries({ queryKey: ['trip-expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['trip-linked-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['trip-balances'] });
       setDate('');
       setCategoryId('');
       setClearCategory(false);
       setTags('');
+      setTripId('');
+      setUnlinkTrip(false);
+      setSelectedMemberIds([]);
+      setPaidByMemberId('');
       onSuccess();
     },
   });
@@ -1097,6 +1163,7 @@ function BulkEditModal({
     if (activeTab === 'date') return !!date;
     if (activeTab === 'category') return clearCategory || !!categoryId;
     if (activeTab === 'tags') return !!tags.trim();
+    if (activeTab === 'trip') return unlinkTrip || !!tripId;
     return false;
   };
 
@@ -1111,6 +1178,7 @@ function BulkEditModal({
     { id: 'date', label: 'Date', icon: Calendar },
     { id: 'category', label: 'Category', icon: FolderOpen },
     { id: 'tags', label: 'Tags', icon: Tag },
+    { id: 'trip', label: 'Trip', icon: MapPin },
   ] as const;
 
   return (
@@ -1214,6 +1282,92 @@ function BulkEditModal({
                     : 'These tags will replace all existing tags'
                 }
               />
+            </div>
+          )}
+
+          {activeTab === 'trip' && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-400">
+                Link or unlink all {selectedCount} selected transaction(s) from a trip.
+              </p>
+              <label className="flex items-center gap-2 text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={unlinkTrip}
+                  onChange={(e) => {
+                    setUnlinkTrip(e.target.checked);
+                    if (e.target.checked) {
+                      setTripId('');
+                      setSelectedMemberIds([]);
+                      setPaidByMemberId('');
+                    }
+                  }}
+                  className="rounded border-gray-500 text-primary-600 focus:ring-primary-500 bg-gray-700"
+                />
+                <span>Remove trip link from all selected</span>
+              </label>
+              {!unlinkTrip && (
+                <>
+                  <Select
+                    label="Link to Trip"
+                    options={[
+                      { value: '', label: 'Select trip' },
+                      ...trips.map((trip) => ({ value: trip._id, label: trip.name })),
+                    ]}
+                    value={tripId}
+                    onChange={handleTripChange}
+                  />
+
+                  {selectedTrip && selectedTrip.members.length > 0 && (
+                    <div className="space-y-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-sm font-medium text-gray-300">Split with Members</label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedMemberIds(selectedTrip.members.map((member) => member._id!))
+                          }
+                          className="text-xs text-primary-400 hover:text-primary-300"
+                        >
+                          Select all
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedTrip.members.map((member) => {
+                          const isSelected = selectedMemberIds.includes(member._id!);
+                          return (
+                            <button
+                              key={member._id}
+                              type="button"
+                              onClick={() => toggleMember(member._id!)}
+                              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                                isSelected
+                                  ? 'bg-primary-600 text-white'
+                                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                              }`}
+                            >
+                              {member.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selectedMemberIds.length > 0 && (
+                        <Select
+                          label="Paid By"
+                          options={selectedTrip.members
+                            .filter((member) => selectedMemberIds.includes(member._id!))
+                            .map((member) => ({ value: member._id!, label: member.name }))}
+                          value={paidByMemberId}
+                          onChange={(value) => setPaidByMemberId(value)}
+                        />
+                      )}
+                      <p className="text-xs text-gray-500">
+                        Each transaction will be split equally among selected members based on its amount.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>

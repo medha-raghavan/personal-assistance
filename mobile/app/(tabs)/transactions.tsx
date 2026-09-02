@@ -29,6 +29,7 @@ import {
 } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
 import { TransactionCalendarView } from '../../components/transactions/TransactionCalendarView';
+import { useAuthStore } from '../../store/authStore';
 
 function toLocalDateString(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
@@ -97,12 +98,16 @@ interface Trip {
 export default function TransactionsScreen() {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { user } = useAuthStore();
   const [showFilters, setShowFilters] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
   const [filters, setFilters] = useState<TransactionFilters>({
     page: 1,
     limit: 50,
@@ -201,6 +206,26 @@ export default function TransactionsScreen() {
     },
   });
 
+  const bulkUpdateMutation = useMutation({
+    mutationFn: (updates: Parameters<typeof transactionService.bulkUpdate>[1]) =>
+      transactionService.bulkUpdate(Array.from(selectedIds), updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['sections'] });
+      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      queryClient.invalidateQueries({ queryKey: ['trip-expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['trip-linked-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['trip-balances'] });
+      setShowBulkEditModal(false);
+      clearSelection();
+      Alert.alert('Success', 'Transactions updated');
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.response?.data?.error?.message || 'Failed to update transactions');
+    },
+  });
+
   const handleSearch = useCallback(() => {
     setFilters((prev) => ({ ...prev, search: searchQuery, page: 1 }));
   }, [searchQuery]);
@@ -220,6 +245,52 @@ export default function TransactionsScreen() {
   const openEditModal = (tx: Transaction) => {
     setEditingTx(tx);
     setShowEditModal(true);
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      if (next.size === 0) {
+        setSelectionMode(false);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  };
+
+  const toggleAllSelection = () => {
+    if (selectedIds.size === transactions.length) {
+      clearSelection();
+    } else {
+      setSelectionMode(true);
+      setSelectedIds(new Set(transactions.map((tx) => tx._id)));
+    }
+  };
+
+  const handleTransactionPress = (tx: Transaction) => {
+    if (selectionMode) {
+      toggleSelection(tx._id);
+      return;
+    }
+    openEditModal(tx);
+  };
+
+  const handleTransactionLongPress = (tx: Transaction) => {
+    if (!selectionMode) {
+      setSelectionMode(true);
+      setSelectedIds(new Set([tx._id]));
+      return;
+    }
+    toggleSelection(tx._id);
   };
 
   const handleDelete = (tx: Transaction) => {
@@ -252,14 +323,33 @@ export default function TransactionsScreen() {
 
   const { isDark, colors } = useTheme();
 
-  const renderTransaction = ({ item }: { item: Transaction }) => (
+  const renderTransaction = ({ item }: { item: Transaction }) => {
+    const isSelected = selectedIds.has(item._id);
+
+    return (
     <TouchableOpacity
-      style={{ backgroundColor: colors.card }}
+      style={{
+        backgroundColor: colors.card,
+        borderColor: isSelected ? '#0ea5e9' : 'transparent',
+        borderWidth: isSelected ? 2 : 0,
+      }}
       className="rounded-xl p-4 mb-3 shadow-sm"
-      onPress={() => openEditModal(item)}
-      onLongPress={() => handleDelete(item)}
+      onPress={() => handleTransactionPress(item)}
+      onLongPress={() => handleTransactionLongPress(item)}
     >
       <View className="flex-row justify-between items-start">
+        {selectionMode && (
+          <TouchableOpacity
+            className="mr-3 mt-1"
+            onPress={() => toggleSelection(item._id)}
+          >
+            <Ionicons
+              name={isSelected ? 'checkbox' : 'square-outline'}
+              size={22}
+              color={isSelected ? '#0ea5e9' : colors.textMuted}
+            />
+          </TouchableOpacity>
+        )}
         <View className="flex-1 mr-3">
           <Text style={{ color: colors.text }} className="font-medium" numberOfLines={2}>
             {item.description}
@@ -296,7 +386,8 @@ export default function TransactionsScreen() {
         </Text>
       </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   const uploadEnabledSections = sections.filter((s: Section) => s.uploadEnabled !== false);
 
@@ -323,6 +414,37 @@ export default function TransactionsScreen() {
           </View>
         </View>
       </View>
+
+      {(selectionMode || selectedIds.size > 0) && viewMode === 'list' && (
+        <View
+          style={{ backgroundColor: isDark ? '#0c4a6e' : '#e0f2fe', borderColor: colors.border }}
+          className="px-4 py-3 border-b flex-row items-center justify-between"
+        >
+          <View className="flex-row items-center gap-2">
+            <TouchableOpacity onPress={toggleAllSelection}>
+              <Ionicons
+                name={selectedIds.size === transactions.length && transactions.length > 0 ? 'checkbox' : 'square-outline'}
+                size={22}
+                color="#0ea5e9"
+              />
+            </TouchableOpacity>
+            <Text style={{ color: colors.text }} className="font-medium">
+              {selectedIds.size} selected
+            </Text>
+            <TouchableOpacity onPress={clearSelection}>
+              <Text className="text-sky-600 text-sm">Clear</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            className="bg-sky-500 px-3 py-2 rounded-lg flex-row items-center"
+            onPress={() => setShowBulkEditModal(true)}
+            disabled={selectedIds.size === 0}
+          >
+            <Ionicons name="create-outline" size={16} color="white" />
+            <Text className="text-white font-medium ml-1">Bulk Edit</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Search & Filter Bar */}
       <View style={{ backgroundColor: colors.card, borderColor: colors.border }} className="px-4 py-3 border-b flex-row items-center gap-2">
@@ -357,20 +479,34 @@ export default function TransactionsScreen() {
         </TouchableOpacity>
         <View className="flex-row rounded-lg p-0.5" style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }}>
           <TouchableOpacity
-            onPress={() => setViewMode('list')}
+            onPress={() => {
+              setViewMode('list');
+            }}
             className="px-2.5 py-1.5 rounded-md"
             style={viewMode === 'list' ? { backgroundColor: '#0ea5e9' } : {}}
           >
             <Ionicons name="list" size={18} color={viewMode === 'list' ? 'white' : colors.icon} />
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => setViewMode('calendar')}
+            onPress={() => {
+              clearSelection();
+              setViewMode('calendar');
+            }}
             className="px-2.5 py-1.5 rounded-md"
             style={viewMode === 'calendar' ? { backgroundColor: '#0ea5e9' } : {}}
           >
             <Ionicons name="calendar" size={18} color={viewMode === 'calendar' ? 'white' : colors.icon} />
           </TouchableOpacity>
         </View>
+        {viewMode === 'list' && !selectionMode && (
+          <TouchableOpacity
+            className="p-2 rounded-lg"
+            style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }}
+            onPress={() => setSelectionMode(true)}
+          >
+            <Ionicons name="checkbox-outline" size={20} color={colors.icon} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Transaction List / Calendar */}
@@ -774,6 +910,18 @@ export default function TransactionsScreen() {
         visible={showUploadModal}
         sections={uploadEnabledSections}
         onClose={() => setShowUploadModal(false)}
+      />
+
+      {/* Bulk Edit Modal */}
+      <BulkEditModal
+        visible={showBulkEditModal}
+        selectedCount={selectedIds.size}
+        categories={categories}
+        trips={trips}
+        user={user}
+        onClose={() => setShowBulkEditModal(false)}
+        onSave={(updates) => bulkUpdateMutation.mutate(updates)}
+        isLoading={bulkUpdateMutation.isPending}
       />
 
       {/* Edit Modal */}
@@ -1348,6 +1496,381 @@ function UploadStatementModal({
               </View>
             </>
           )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function BulkEditModal({
+  visible,
+  selectedCount,
+  categories,
+  trips,
+  user,
+  onClose,
+  onSave,
+  isLoading,
+}: {
+  visible: boolean;
+  selectedCount: number;
+  categories: Category[];
+  trips: Trip[];
+  user: { name: string; email: string } | null;
+  onClose: () => void;
+  onSave: (updates: Parameters<typeof transactionService.bulkUpdate>[1]) => void;
+  isLoading: boolean;
+}) {
+  const { isDark, colors } = useTheme();
+  const [activeTab, setActiveTab] = useState<'date' | 'category' | 'tags' | 'trip'>('trip');
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [categoryId, setCategoryId] = useState('');
+  const [clearCategory, setClearCategory] = useState(false);
+  const [tags, setTags] = useState('');
+  const [tagAction, setTagAction] = useState<'add' | 'remove' | 'replace'>('add');
+  const [tripId, setTripId] = useState('');
+  const [unlinkTrip, setUnlinkTrip] = useState(false);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [paidByMemberId, setPaidByMemberId] = useState('');
+
+  const findCurrentUserMember = (trip: Trip): TripMember | undefined => {
+    if (!user) return undefined;
+    const userName = user.name.toLowerCase();
+    const userEmail = user.email.toLowerCase();
+    return trip.members.find((member) => {
+      const memberName = member.name.toLowerCase();
+      const memberEmail = member.email?.toLowerCase() || '';
+      return memberName === userName || memberEmail === userEmail;
+    });
+  };
+
+  const selectedTrip = tripId ? trips.find((trip) => trip._id === tripId) : undefined;
+
+  const handleTripChange = (value: string) => {
+    setUnlinkTrip(false);
+    setTripId(value);
+    const trip = trips.find((t) => t._id === value);
+    if (trip) {
+      const memberIds = trip.members.map((member) => member._id!);
+      const currentUserMember = findCurrentUserMember(trip);
+      setSelectedMemberIds(memberIds);
+      setPaidByMemberId(currentUserMember?._id || trip.members[0]?._id || '');
+    } else {
+      setSelectedMemberIds([]);
+      setPaidByMemberId('');
+    }
+  };
+
+  const toggleMember = (memberId: string) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
+    );
+  };
+
+  const resetForm = () => {
+    setActiveTab('trip');
+    setDate(new Date());
+    setCategoryId('');
+    setClearCategory(false);
+    setTags('');
+    setTagAction('add');
+    setTripId('');
+    setUnlinkTrip(false);
+    setSelectedMemberIds([]);
+    setPaidByMemberId('');
+  };
+
+  const canSubmit = () => {
+    if (activeTab === 'date') return true;
+    if (activeTab === 'category') return clearCategory || !!categoryId;
+    if (activeTab === 'tags') return !!tags.trim();
+    if (activeTab === 'trip') return unlinkTrip || !!tripId;
+    return false;
+  };
+
+  const handleSave = () => {
+    if (!canSubmit()) return;
+
+    const updates: Parameters<typeof transactionService.bulkUpdate>[1] = {};
+
+    if (activeTab === 'date') {
+      updates.transactionDate = date.toISOString();
+    } else if (activeTab === 'category') {
+      updates.categoryId = clearCategory ? null : categoryId;
+    } else if (activeTab === 'tags') {
+      updates.tags = tags.split(',').map((tag) => tag.trim()).filter(Boolean);
+      updates.tagAction = tagAction;
+    } else if (activeTab === 'trip') {
+      if (unlinkTrip) {
+        updates.tripId = null;
+      } else if (tripId) {
+        updates.tripId = tripId;
+        if (selectedMemberIds.length > 0) {
+          updates.tripMemberIds = selectedMemberIds;
+          updates.paidByMemberId = paidByMemberId;
+          const payer = selectedTrip?.members.find((member) => member._id === paidByMemberId);
+          updates.paidByMemberName = payer?.name;
+        }
+      }
+    }
+
+    onSave(updates);
+  };
+
+  const tabs = [
+    { id: 'trip' as const, label: 'Trip', icon: 'map-outline' as const },
+    { id: 'date' as const, label: 'Date', icon: 'calendar-outline' as const },
+    { id: 'category' as const, label: 'Category', icon: 'folder-outline' as const },
+    { id: 'tags' as const, label: 'Tags', icon: 'pricetag-outline' as const },
+  ];
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View className="flex-1 bg-black/50 justify-end">
+        <View style={{ backgroundColor: colors.card }} className="rounded-t-3xl max-h-[90%]">
+          <View style={{ borderBottomColor: colors.border }} className="flex-row items-center justify-between p-4 border-b">
+            <Text style={{ color: colors.text }} className="text-lg font-semibold">
+              Bulk Edit ({selectedCount})
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                resetForm();
+                onClose();
+              }}
+            >
+              <Ionicons name="close" size={24} color={colors.icon} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="border-b" style={{ borderBottomColor: colors.border }}>
+            {tabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.id}
+                onPress={() => setActiveTab(tab.id)}
+                className="px-4 py-3 flex-row items-center"
+                style={activeTab === tab.id ? { borderBottomWidth: 2, borderBottomColor: '#0ea5e9' } : {}}
+              >
+                <Ionicons
+                  name={tab.icon}
+                  size={16}
+                  color={activeTab === tab.id ? '#0ea5e9' : colors.textMuted}
+                />
+                <Text
+                  className="ml-2 font-medium"
+                  style={{ color: activeTab === tab.id ? '#0ea5e9' : colors.textSecondary }}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <ScrollView className="p-4" style={{ maxHeight: 420 }}>
+            {activeTab === 'trip' && (
+              <View>
+                <Text style={{ color: colors.textSecondary }} className="text-sm mb-4">
+                  Link or unlink all selected transactions from a trip.
+                </Text>
+                <TouchableOpacity
+                  className="flex-row items-center mb-4"
+                  onPress={() => {
+                    setUnlinkTrip(!unlinkTrip);
+                    if (!unlinkTrip) {
+                      setTripId('');
+                      setSelectedMemberIds([]);
+                      setPaidByMemberId('');
+                    }
+                  }}
+                >
+                  <Ionicons
+                    name={unlinkTrip ? 'checkbox' : 'square-outline'}
+                    size={22}
+                    color={unlinkTrip ? '#0ea5e9' : colors.textMuted}
+                  />
+                  <Text style={{ color: colors.text }} className="ml-2">Remove trip link from all selected</Text>
+                </TouchableOpacity>
+                {!unlinkTrip && (
+                  <>
+                    <Text style={{ color: colors.text }} className="text-sm font-medium mb-1">Link to Trip</Text>
+                    <View style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }} className="rounded-lg mb-4">
+                      <Picker
+                        selectedValue={tripId}
+                        onValueChange={(value) => handleTripChange(value)}
+                        style={{ color: colors.text }}
+                      >
+                        <Picker.Item label="Select trip" value="" />
+                        {trips.map((trip) => (
+                          <Picker.Item key={trip._id} label={trip.name} value={trip._id} />
+                        ))}
+                      </Picker>
+                    </View>
+                    {selectedTrip && selectedTrip.members.length > 0 && (
+                      <View style={{ backgroundColor: isDark ? '#1f2937' : '#f9fafb' }} className="rounded-lg p-3">
+                        <View className="flex-row items-center justify-between mb-2">
+                          <Text style={{ color: colors.text }} className="text-sm font-medium">Split with Members</Text>
+                          <TouchableOpacity
+                            onPress={() => setSelectedMemberIds(selectedTrip.members.map((member) => member._id!))}
+                          >
+                            <Text className="text-sky-600 text-xs">Select all</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <View className="flex-row flex-wrap gap-2 mb-3">
+                          {selectedTrip.members.map((member) => {
+                            const isSelected = selectedMemberIds.includes(member._id!);
+                            return (
+                              <TouchableOpacity
+                                key={member._id}
+                                onPress={() => toggleMember(member._id!)}
+                                className="px-3 py-1.5 rounded-lg"
+                                style={{ backgroundColor: isSelected ? '#0ea5e9' : (isDark ? '#374151' : '#e5e7eb') }}
+                              >
+                                <Text style={{ color: isSelected ? 'white' : colors.text }} className="text-sm">
+                                  {member.name}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                        {selectedMemberIds.length > 0 && (
+                          <>
+                            <Text style={{ color: colors.text }} className="text-sm font-medium mb-1">Paid By</Text>
+                            <View style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }} className="rounded-lg">
+                              <Picker
+                                selectedValue={paidByMemberId}
+                                onValueChange={(value) => setPaidByMemberId(value)}
+                                style={{ color: colors.text }}
+                              >
+                                {selectedTrip.members
+                                  .filter((member) => selectedMemberIds.includes(member._id!))
+                                  .map((member) => (
+                                    <Picker.Item key={member._id} label={member.name} value={member._id!} />
+                                  ))}
+                              </Picker>
+                            </View>
+                          </>
+                        )}
+                        <Text style={{ color: colors.textMuted }} className="text-xs mt-2">
+                          Each transaction will be split equally among selected members based on its amount.
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+            )}
+
+            {activeTab === 'date' && (
+              <View>
+                <Text style={{ color: colors.textSecondary }} className="text-sm mb-4">
+                  Set a new date for all selected transactions.
+                </Text>
+                <TouchableOpacity
+                  className="rounded-lg px-4 py-3 flex-row items-center justify-between"
+                  style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={{ color: colors.text }}>{formatDate(date.toISOString())}</Text>
+                  <Ionicons name="calendar-outline" size={20} color={colors.icon} />
+                </TouchableOpacity>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={date}
+                    mode="date"
+                    onChange={(_, selectedDate) => {
+                      setShowDatePicker(false);
+                      if (selectedDate) setDate(selectedDate);
+                    }}
+                  />
+                )}
+              </View>
+            )}
+
+            {activeTab === 'category' && (
+              <View>
+                <Text style={{ color: colors.textSecondary }} className="text-sm mb-4">
+                  Change the category for all selected transactions.
+                </Text>
+                <TouchableOpacity
+                  className="flex-row items-center mb-4"
+                  onPress={() => {
+                    setClearCategory(!clearCategory);
+                    if (!clearCategory) setCategoryId('');
+                  }}
+                >
+                  <Ionicons
+                    name={clearCategory ? 'checkbox' : 'square-outline'}
+                    size={22}
+                    color={clearCategory ? '#0ea5e9' : colors.textMuted}
+                  />
+                  <Text style={{ color: colors.text }} className="ml-2">Clear category from all</Text>
+                </TouchableOpacity>
+                {!clearCategory && (
+                  <>
+                    <Text style={{ color: colors.text }} className="text-sm font-medium mb-1">New Category</Text>
+                    <View style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }} className="rounded-lg">
+                      <Picker
+                        selectedValue={categoryId}
+                        onValueChange={(value) => setCategoryId(value)}
+                        style={{ color: colors.text }}
+                      >
+                        <Picker.Item label="Select category" value="" />
+                        {categories.map((category) => (
+                          <Picker.Item key={category._id} label={category.name} value={category._id} />
+                        ))}
+                      </Picker>
+                    </View>
+                  </>
+                )}
+              </View>
+            )}
+
+            {activeTab === 'tags' && (
+              <View>
+                <Text style={{ color: colors.textSecondary }} className="text-sm mb-4">
+                  Modify tags for all selected transactions.
+                </Text>
+                <View className="flex-row gap-2 mb-4">
+                  {(['add', 'remove', 'replace'] as const).map((action) => (
+                    <TouchableOpacity
+                      key={action}
+                      onPress={() => setTagAction(action)}
+                      className="px-3 py-1.5 rounded-lg"
+                      style={{ backgroundColor: tagAction === action ? '#0ea5e9' : (isDark ? '#374151' : '#e5e7eb') }}
+                    >
+                      <Text style={{ color: tagAction === action ? 'white' : colors.text }} className="text-sm capitalize">
+                        {action}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ color: colors.text }} className="text-sm font-medium mb-1">Tags</Text>
+                <TextInput
+                  value={tags}
+                  onChangeText={setTags}
+                  placeholder="e.g. food, travel"
+                  placeholderTextColor={colors.textMuted}
+                  style={{ color: colors.text, backgroundColor: isDark ? '#374151' : '#f3f4f6' }}
+                  className="rounded-lg px-4 py-3"
+                />
+              </View>
+            )}
+
+            <TouchableOpacity
+              className="bg-sky-500 rounded-xl py-4 items-center mt-6"
+              onPress={handleSave}
+              disabled={!canSubmit() || isLoading}
+              style={{ opacity: !canSubmit() || isLoading ? 0.6 : 1 }}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text className="text-white font-semibold text-lg">
+                  Update {selectedCount} Transaction{selectedCount !== 1 ? 's' : ''}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </View>
     </Modal>

@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { Transaction } from '../models/Transaction.js';
 import { Section } from '../models/Section.js';
+import { Trip } from '../models/Trip.js';
 import { ApiError } from '../middleware/errorHandler.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { generateCompositeKey, extractKeywordsFromDescription } from '../utils/helpers.js';
@@ -366,13 +367,29 @@ export async function bulkUpdateTags(
   }
 }
 
+function buildEqualTripSplits(
+  amount: number,
+  memberIds: string[],
+  memberNameById: Map<string, string>
+): Array<{ memberId: mongoose.Types.ObjectId; memberName: string; amount: number }> {
+  if (memberIds.length === 0) return [];
+
+  const splitAmount = amount / memberIds.length;
+  return memberIds.map((id) => ({
+    memberId: new mongoose.Types.ObjectId(id),
+    memberName: memberNameById.get(id) || 'Unknown',
+    amount: splitAmount,
+  }));
+}
+
 export async function bulkUpdate(
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    const { transactionIds, updates } = req.body;
+    const { transactionIds: bodyTransactionIds, ids, updates } = req.body;
+    const transactionIds = bodyTransactionIds || ids;
 
     if (!transactionIds || !Array.isArray(transactionIds) || transactionIds.length === 0) {
       throw new ApiError(400, 'Transaction IDs required');
@@ -382,7 +399,16 @@ export async function bulkUpdate(
       throw new ApiError(400, 'Updates object required');
     }
 
-    const { transactionDate, categoryId, tags, tagAction } = updates;
+    const {
+      transactionDate,
+      categoryId,
+      tags,
+      tagAction,
+      tripId,
+      tripMemberIds,
+      paidByMemberId,
+      paidByMemberName,
+    } = updates;
 
     const updateSet: Record<string, unknown> = {};
     const updateUnset: Record<string, 1> = {};
@@ -410,20 +436,84 @@ export async function bulkUpdate(
       }
     }
 
-    const updateQuery: Record<string, unknown> = {};
-    if (Object.keys(updateSet).length > 0) updateQuery.$set = updateSet;
-    if (Object.keys(updateUnset).length > 0) updateQuery.$unset = updateUnset;
-
     const filter = {
-      _id: { $in: transactionIds.map(id => new mongoose.Types.ObjectId(id)) },
+      _id: { $in: transactionIds.map((id: string) => new mongoose.Types.ObjectId(id)) },
       userId: req.userId,
     };
 
     let modifiedCount = 0;
+    let tripBulkHandled = false;
 
-    if (Object.keys(updateQuery).length > 0) {
+    if (tripId !== undefined) {
+      if (!tripId) {
+        updateUnset.tripId = 1;
+        updateUnset.tripSplits = 1;
+        updateUnset.paidByMemberId = 1;
+        updateUnset.paidByMemberName = 1;
+      } else {
+        const trip = await Trip.findOne({
+          _id: new mongoose.Types.ObjectId(tripId),
+          userId: req.userId,
+        });
+
+        if (!trip) {
+          throw new ApiError(404, 'Trip not found');
+        }
+
+        const memberNameById = new Map(
+          trip.members
+            .filter((member) => member._id)
+            .map((member) => [member._id!.toString(), member.name])
+        );
+
+        if (tripMemberIds && Array.isArray(tripMemberIds) && tripMemberIds.length > 0) {
+          const transactions = await Transaction.find(filter).select('amount');
+          const tripObjectId = new mongoose.Types.ObjectId(tripId);
+          const paidByObjectId = paidByMemberId
+            ? new mongoose.Types.ObjectId(paidByMemberId)
+            : undefined;
+
+          const bulkOps = transactions.map((transaction) => {
+            const perTransactionUpdate: Record<string, unknown> = {
+              tripId: tripObjectId,
+              tripSplits: buildEqualTripSplits(transaction.amount, tripMemberIds, memberNameById),
+            };
+
+            if (paidByObjectId) {
+              perTransactionUpdate.paidByMemberId = paidByObjectId;
+              perTransactionUpdate.paidByMemberName = paidByMemberName || memberNameById.get(paidByMemberId) || '';
+            }
+
+            return {
+              updateOne: {
+                filter: { _id: transaction._id, userId: req.userId },
+                update: { $set: perTransactionUpdate },
+              },
+            };
+          });
+
+          if (bulkOps.length > 0) {
+            const bulkResult = await Transaction.bulkWrite(bulkOps);
+            modifiedCount = Math.max(modifiedCount, bulkResult.modifiedCount);
+          }
+
+          tripBulkHandled = true;
+        } else {
+          updateSet.tripId = new mongoose.Types.ObjectId(tripId);
+          updateUnset.tripSplits = 1;
+          updateUnset.paidByMemberId = 1;
+          updateUnset.paidByMemberName = 1;
+        }
+      }
+    }
+
+    const updateQuery: Record<string, unknown> = {};
+    if (Object.keys(updateSet).length > 0) updateQuery.$set = updateSet;
+    if (Object.keys(updateUnset).length > 0) updateQuery.$unset = updateUnset;
+
+    if (!tripBulkHandled && Object.keys(updateQuery).length > 0) {
       const result = await Transaction.updateMany(filter, updateQuery);
-      modifiedCount = result.modifiedCount;
+      modifiedCount = Math.max(modifiedCount, result.modifiedCount);
     }
 
     if (tagOperation) {
