@@ -102,6 +102,7 @@ Or use the URL from the build output.
 
 | Issue | Solution |
 |-------|----------|
+| `package.json does not exist in .../build/mobile` | Ensure `mobile/package.json` is committed to git (not gitignored). Run builds from the `mobile/` directory: `cd mobile && eas build ...` |
 | Metro errors | `npx expo start --clear` |
 | Dependency conflicts | `npx expo install --fix` |
 | Missing assets | Ensure `assets/` has icon.png, splash.png, adaptive-icon.png |

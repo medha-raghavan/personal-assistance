@@ -1,5 +1,5 @@
 import { Platform, PermissionsAndroid, Alert, Linking } from 'react-native';
-import { parsePaymentSMS, isPaymentSender } from './paymentParser';
+import { parsePaymentSMS } from './paymentParser';
 import { usePaymentStore } from '../store/paymentStore';
 
 let smsSubscription: any = null;
@@ -95,14 +95,11 @@ function handleIncomingSms(sender: string, body: string) {
     return;
   }
 
-  if (!isPaymentSender(sender)) {
-    return;
-  }
-
   const payment = parsePaymentSMS(body, sender);
 
   if (payment && payment.amount > 0) {
     console.log('Payment detected:', {
+      sender,
       amount: payment.amount,
       merchant: payment.merchant,
       type: payment.type,

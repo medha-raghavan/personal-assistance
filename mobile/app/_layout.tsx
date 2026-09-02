@@ -28,14 +28,18 @@ function RootLayoutContent() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated && Platform.OS === 'android') {
-      if (isSmsListenerAvailable()) {
-        initializeSmsListener().then((success) => {
-          if (success) {
-            console.log('SMS listener initialized successfully');
-          }
-        });
-      }
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    if (isAuthenticated) {
+      initializeSmsListener().then((success) => {
+        if (success) {
+          console.log('SMS listener initialized successfully');
+        }
+      });
+    } else {
+      stopSmsListener();
     }
 
     return () => {

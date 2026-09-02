@@ -13,10 +13,14 @@ This feature automatically detects payments from bank/UPI SMS messages and promp
 
 ### Step 1: Install SMS Listener Library
 
+The dependency is included in `package.json`:
+
 ```bash
 cd mobile
-npm install react-native-android-sms-listener
+npm install
 ```
+
+This installs `react-native-android-sms-listener`, which requires a native rebuild (EAS build or `expo run:android` — not Expo Go).
 
 ### Step 2: Add Permissions to AndroidManifest.xml
 
