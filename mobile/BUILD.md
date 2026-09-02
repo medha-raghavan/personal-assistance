@@ -103,6 +103,7 @@ Or use the URL from the build output.
 | Issue | Solution |
 |-------|----------|
 | `package.json does not exist in .../build/mobile` | Ensure `mobile/package.json` is committed to git (not gitignored). Run builds from the `mobile/` directory: `cd mobile && eas build ...` |
+| `ENOENT .../mobile/android/gradlew` | Do not commit a partial `android/` folder. It is gitignored; EAS runs `expo prebuild` to generate it. Remove any tracked android files: `git rm -r --cached mobile/android` then commit and rebuild. |
 | Metro errors | `npx expo start --clear` |
 | Dependency conflicts | `npx expo install --fix` |
 | Missing assets | Ensure `assets/` has icon.png, splash.png, adaptive-icon.png |

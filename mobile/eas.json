@@ -7,6 +7,7 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "prebuildCommand": "npx expo prebuild --platform android --clean",
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleDebug"
@@ -14,6 +15,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "prebuildCommand": "npx expo prebuild --platform android --clean",
       "android": {
         "buildType": "apk"
       },
@@ -24,6 +26,7 @@
     "preview-apk": {
       "distribution": "internal",
       "developmentClient": false,
+      "prebuildCommand": "npx expo prebuild --platform android --clean",
       "cache": {
         "disabled": true
       },
