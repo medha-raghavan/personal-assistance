@@ -21,8 +21,6 @@ mobile/android/
 mobile/ios/
 mobile/web/
 mobile/node_modules/
-mobile/package-lock.json
-mobile/package.json
 
 # Backend
 backend/node_modules/
