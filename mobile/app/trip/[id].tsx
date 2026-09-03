@@ -16,11 +16,13 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { tripService, Trip, TripMember, TripExpense } from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import { useTheme } from '../../components/ThemeProvider';
+import { PillTabs } from '../../components/ui';
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-IN', {
@@ -693,25 +695,17 @@ export default function TripDetailsScreen() {
       </View>
 
       {/* Tabs */}
-      <View style={{ backgroundColor: colors.card, borderBottomColor: colors.border }} className="flex-row border-b">
-        {(['expenses', 'breakdown', 'members', 'balances'] as TabType[]).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            className={`flex-1 py-3 items-center ${
-              activeTab === tab ? 'border-b-2 border-sky-500' : ''
-            }`}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text
-              className={`font-medium capitalize ${
-                activeTab === tab ? 'text-sky-600' : ''
-              }`}
-              style={activeTab !== tab ? { color: colors.textMuted } : {}}
-            >
-              {tab}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={{ backgroundColor: colors.card, paddingHorizontal: 12, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <PillTabs
+          tabs={[
+            { id: 'expenses', label: 'Expenses' },
+            { id: 'breakdown', label: 'Breakdown' },
+            { id: 'members', label: 'Members' },
+            { id: 'balances', label: 'Balances' },
+          ]}
+          value={activeTab}
+          onChange={setActiveTab}
+        />
       </View>
 
       <ScrollView
@@ -1503,7 +1497,7 @@ export default function TripDetailsScreen() {
                   <DateTimePicker
                     value={editExpenseForm.date}
                     mode="date"
-                    onChange={(event, date) => {
+                    onChange={(_event: unknown, date?: Date) => {
                       setShowEditDatePicker(false);
                       if (date) setEditExpenseForm({ ...editExpenseForm, date });
                     }}

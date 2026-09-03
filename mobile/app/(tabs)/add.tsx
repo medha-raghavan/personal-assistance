@@ -70,6 +70,7 @@ export default function AddTransactionScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['sections'] });
       Alert.alert('Success', 'Transaction added successfully');
       resetForm();

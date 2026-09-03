@@ -7,6 +7,7 @@ import { usePaymentStore } from '../../store/paymentStore';
 import { useTheme } from '../../components/ThemeProvider';
 import { ThemeMode } from '../../store/themeStore';
 import { Ionicons } from '@expo/vector-icons';
+import { PageHeader, Panel } from '../../components/ui';
 import {
   isSmsListenerAvailable,
   checkSmsPermission,
@@ -161,11 +162,16 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={{ backgroundColor: colors.background }} className="flex-1">
       <View className="p-4">
+        <PageHeader title="Settings" subtitle="Theme, widgets, and shortcuts" />
+
         {/* User Profile */}
-        <View style={{ backgroundColor: colors.card }} className="rounded-2xl p-5 shadow-sm mb-4">
+        <Panel style={{ marginBottom: 16 }}>
           <View className="flex-row items-center">
-            <View className="w-16 h-16 bg-sky-100 rounded-full items-center justify-center">
-              <Text className="text-sky-600 text-2xl font-bold">
+            <View
+              className="w-16 h-16 rounded-full items-center justify-center"
+              style={{ backgroundColor: colors.primary + '22' }}
+            >
+              <Text style={{ color: colors.primary }} className="text-2xl font-bold">
                 {user?.name?.charAt(0).toUpperCase()}
               </Text>
             </View>
@@ -174,13 +180,13 @@ export default function SettingsScreen() {
               <Text style={{ color: colors.textSecondary }}>{user?.email}</Text>
             </View>
           </View>
-        </View>
+        </Panel>
 
         {/* Appearance Settings */}
         <Text style={{ color: colors.textSecondary }} className="text-sm font-medium mb-2 ml-1">
           APPEARANCE
         </Text>
-        <View style={{ backgroundColor: colors.card }} className="rounded-xl shadow-sm mb-4">
+        <Panel padded={false} style={{ marginBottom: 16 }}>
           {themeOptions.map((option, index) => (
             <TouchableOpacity
               key={option.value}
@@ -191,14 +197,14 @@ export default function SettingsScreen() {
               onPress={() => setMode(option.value)}
             >
               <View className="flex-row items-center">
-                <View 
+                <View
                   className="w-10 h-10 rounded-full items-center justify-center"
-                  style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }}
+                  style={{ backgroundColor: colors.panel2 }}
                 >
-                  <Ionicons 
-                    name={option.icon as any} 
-                    size={22} 
-                    color={mode === option.value ? colors.primary : colors.icon} 
+                  <Ionicons
+                    name={option.icon as any}
+                    size={22}
+                    color={mode === option.value ? colors.primary : colors.icon}
                   />
                 </View>
                 <Text style={{ color: colors.text }} className="ml-3 font-medium">
@@ -210,7 +216,7 @@ export default function SettingsScreen() {
               )}
             </TouchableOpacity>
           ))}
-        </View>
+        </Panel>
 
         {/* Home Screen Widget (Android Only) */}
         {Platform.OS === 'android' && (
@@ -218,10 +224,13 @@ export default function SettingsScreen() {
             <Text style={{ color: colors.textSecondary }} className="text-sm font-medium mb-2 ml-1">
               HOME SCREEN WIDGET
             </Text>
-            <View style={{ backgroundColor: colors.card }} className="rounded-xl shadow-sm mb-4">
+            <Panel padded={false} style={{ marginBottom: 16 }}>
               <View className="flex-row items-center p-4 border-b" style={{ borderColor: colors.border }}>
-                <View className="w-10 h-10 bg-sky-100 rounded-full items-center justify-center">
-                  <Ionicons name="grid-outline" size={22} color="#0ea5e9" />
+                <View
+                  className="w-10 h-10 rounded-full items-center justify-center"
+                  style={{ backgroundColor: colors.primary + '22' }}
+                >
+                  <Ionicons name="grid-outline" size={22} color={colors.primary} />
                 </View>
                 <View className="ml-3 flex-1">
                   <Text style={{ color: colors.text }} className="font-medium">Dashboard Widget</Text>
@@ -238,8 +247,11 @@ export default function SettingsScreen() {
                     .catch(() => Alert.alert('Update Failed', 'Open the app while logged in, then try again.'));
                 }}
               >
-                <View className="w-10 h-10 bg-indigo-100 rounded-full items-center justify-center">
-                  <Ionicons name="refresh-outline" size={22} color="#6366f1" />
+                <View
+                  className="w-10 h-10 rounded-full items-center justify-center"
+                  style={{ backgroundColor: colors.panel2 }}
+                >
+                  <Ionicons name="refresh-outline" size={22} color={colors.icon} />
                 </View>
                 <View className="ml-3 flex-1">
                   <Text style={{ color: colors.text }} className="font-medium">Refresh Widget</Text>
@@ -247,7 +259,7 @@ export default function SettingsScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
               </TouchableOpacity>
-            </View>
+            </Panel>
           </>
         )}
 
@@ -257,11 +269,14 @@ export default function SettingsScreen() {
             <Text style={{ color: colors.textSecondary }} className="text-sm font-medium mb-2 ml-1">
               PAYMENT AUTO-DETECTION
             </Text>
-            <View style={{ backgroundColor: colors.card }} className="rounded-xl shadow-sm mb-4">
+            <Panel padded={false} style={{ marginBottom: 16 }}>
               <View className="flex-row items-center justify-between p-4 border-b" style={{ borderColor: colors.border }}>
                 <View className="flex-row items-center flex-1">
-                  <View className="w-10 h-10 bg-green-100 rounded-full items-center justify-center">
-                    <Ionicons name="chatbubble-outline" size={22} color="#22c55e" />
+                  <View
+                    className="w-10 h-10 rounded-full items-center justify-center"
+                    style={{ backgroundColor: colors.income + '22' }}
+                  >
+                    <Ionicons name="chatbubble-outline" size={22} color={colors.income} />
                   </View>
                   <View className="ml-3 flex-1">
                     <Text style={{ color: colors.text }} className="font-medium">SMS Detection</Text>
@@ -277,11 +292,11 @@ export default function SettingsScreen() {
                 <Switch
                   value={smsListenerEnabled && smsAvailable && smsPermissionGranted}
                   onValueChange={handleToggleSmsListener}
-                  trackColor={{ false: isDark ? '#374151' : '#e5e7eb', true: '#bae6fd' }}
+                  trackColor={{ false: colors.panel2, true: colors.primary + '55' }}
                   thumbColor={
                     smsListenerEnabled && smsAvailable && smsPermissionGranted
-                      ? '#0ea5e9'
-                      : isDark ? '#6b7280' : '#f4f4f5'
+                      ? colors.primary
+                      : colors.icon
                   }
                 />
               </View>
@@ -346,7 +361,7 @@ export default function SettingsScreen() {
                   <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
                 </TouchableOpacity>
               )}
-            </View>
+            </Panel>
           </>
         )}
 
@@ -354,14 +369,17 @@ export default function SettingsScreen() {
         <Text style={{ color: colors.textSecondary }} className="text-sm font-medium mb-2 ml-1">
           QUICK PAYMENT ENTRY
         </Text>
-        <View style={{ backgroundColor: colors.card }} className="rounded-xl shadow-sm mb-4">
+        <Panel padded={false} style={{ marginBottom: 16 }}>
           <TouchableOpacity
             className="flex-row items-center p-4 border-b"
             style={{ borderColor: colors.border }}
             onPress={parseFromClipboard}
           >
-            <View className="w-10 h-10 bg-indigo-100 rounded-full items-center justify-center">
-              <Ionicons name="clipboard-outline" size={22} color="#6366f1" />
+            <View
+              className="w-10 h-10 rounded-full items-center justify-center"
+              style={{ backgroundColor: colors.panel2 }}
+            >
+              <Ionicons name="clipboard-outline" size={22} color={colors.icon} />
             </View>
             <View className="ml-3 flex-1">
               <Text style={{ color: colors.text }} className="font-medium">Paste from Clipboard</Text>
@@ -378,8 +396,11 @@ export default function SettingsScreen() {
               });
             }}
           >
-            <View className="w-10 h-10 bg-emerald-100 rounded-full items-center justify-center">
-              <Ionicons name="flash-outline" size={22} color="#10b981" />
+            <View
+              className="w-10 h-10 rounded-full items-center justify-center"
+              style={{ backgroundColor: colors.income + '22' }}
+            >
+              <Ionicons name="flash-outline" size={22} color={colors.income} />
             </View>
             <View className="ml-3 flex-1">
               <Text style={{ color: colors.text }} className="font-medium">Quick Add Payment</Text>
@@ -387,13 +408,11 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
-        </View>
+        </Panel>
 
         {/* Pending Payments (iOS) */}
         {Platform.OS === 'ios' && pendingCount > 0 && (
           <TouchableOpacity
-            style={{ backgroundColor: colors.card }}
-            className="rounded-xl shadow-sm mb-4 flex-row items-center justify-between p-4"
             onPress={() => {
               Alert.alert(
                 'Clear Pending',
@@ -405,26 +424,33 @@ export default function SettingsScreen() {
               );
             }}
           >
-            <View className="flex-row items-center">
-              <View className="w-10 h-10 bg-yellow-100 rounded-full items-center justify-center">
-                <Ionicons name="time-outline" size={22} color="#f59e0b" />
+            <Panel style={{ marginBottom: 16 }}>
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center">
+                  <View
+                    className="w-10 h-10 rounded-full items-center justify-center"
+                    style={{ backgroundColor: colors.savings + '22' }}
+                  >
+                    <Ionicons name="time-outline" size={22} color={colors.savings} />
+                  </View>
+                  <View className="ml-3">
+                    <Text style={{ color: colors.text }} className="font-medium">Pending Payments</Text>
+                    <Text style={{ color: colors.textMuted }} className="text-xs">
+                      {pendingCount} payment{pendingCount !== 1 ? 's' : ''} waiting
+                    </Text>
+                  </View>
+                </View>
+                <View className="px-2 py-1 rounded-full" style={{ backgroundColor: colors.savings + '22' }}>
+                  <Text style={{ color: colors.savings }} className="font-medium">{pendingCount}</Text>
+                </View>
               </View>
-              <View className="ml-3">
-                <Text style={{ color: colors.text }} className="font-medium">Pending Payments</Text>
-                <Text style={{ color: colors.textMuted }} className="text-xs">
-                  {pendingCount} payment{pendingCount !== 1 ? 's' : ''} waiting
-                </Text>
-              </View>
-            </View>
-            <View className="bg-yellow-100 px-2 py-1 rounded-full">
-              <Text className="text-yellow-700 font-medium">{pendingCount}</Text>
-            </View>
+            </Panel>
           </TouchableOpacity>
         )}
 
         {/* Quick Access */}
         <Text style={{ color: colors.textSecondary }} className="text-sm font-medium mb-2 ml-1">QUICK ACCESS</Text>
-        <View style={{ backgroundColor: colors.card }} className="rounded-xl shadow-sm mb-4">
+        <Panel padded={false} style={{ marginBottom: 16 }}>
           {settingsItems.map((item, index) => (
             <TouchableOpacity
               key={item.title}
@@ -434,9 +460,9 @@ export default function SettingsScreen() {
               style={{ borderColor: colors.border }}
               onPress={item.onPress}
             >
-              <View 
+              <View
                 className="w-10 h-10 rounded-full items-center justify-center"
-                style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }}
+                style={{ backgroundColor: colors.panel2 }}
               >
                 <Ionicons name={item.icon as any} size={22} color={colors.icon} />
               </View>
@@ -447,11 +473,11 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
           ))}
-        </View>
+        </Panel>
 
         {/* About */}
         <Text style={{ color: colors.textSecondary }} className="text-sm font-medium mb-2 ml-1">ABOUT</Text>
-        <View style={{ backgroundColor: colors.card }} className="rounded-xl shadow-sm mb-4">
+        <Panel padded={false} style={{ marginBottom: 16 }}>
           {aboutItems.map((item, index) => (
             <TouchableOpacity
               key={item.title}
@@ -461,9 +487,9 @@ export default function SettingsScreen() {
               style={{ borderColor: colors.border }}
               onPress={item.onPress}
             >
-              <View 
+              <View
                 className="w-10 h-10 rounded-full items-center justify-center"
-                style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }}
+                style={{ backgroundColor: colors.panel2 }}
               >
                 <Ionicons name={item.icon as any} size={22} color={colors.icon} />
               </View>
@@ -474,21 +500,24 @@ export default function SettingsScreen() {
               <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
           ))}
-        </View>
+        </Panel>
 
         {/* Logout */}
-        <TouchableOpacity
-          style={{ backgroundColor: colors.card }}
-          className="rounded-xl p-4 shadow-sm flex-row items-center mb-4"
-          onPress={handleLogout}
-        >
-          <View className="w-10 h-10 bg-red-50 rounded-full items-center justify-center">
-            <Ionicons name="log-out-outline" size={22} color="#ef4444" />
-          </View>
-          <View className="ml-3 flex-1">
-            <Text className="text-red-500 font-medium">Logout</Text>
-            <Text style={{ color: colors.textMuted }} className="text-sm">Sign out of your account</Text>
-          </View>
+        <TouchableOpacity onPress={handleLogout}>
+          <Panel style={{ marginBottom: 16 }}>
+            <View className="flex-row items-center">
+              <View
+                className="w-10 h-10 rounded-full items-center justify-center"
+                style={{ backgroundColor: colors.expense + '22' }}
+              >
+                <Ionicons name="log-out-outline" size={22} color={colors.expense} />
+              </View>
+              <View className="ml-3 flex-1">
+                <Text style={{ color: colors.expense }} className="font-medium">Logout</Text>
+                <Text style={{ color: colors.textMuted }} className="text-sm">Sign out of your account</Text>
+              </View>
+            </View>
+          </Panel>
         </TouchableOpacity>
 
         {/* Footer */}

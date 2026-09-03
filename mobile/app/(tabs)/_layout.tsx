@@ -4,7 +4,7 @@ import { TouchableOpacity } from 'react-native';
 import { useTheme } from '../../components/ThemeProvider';
 
 export default function TabLayout() {
-  const { isDark, colors } = useTheme();
+  const { colors } = useTheme();
   const router = useRouter();
   
   const BackButton = () => (
@@ -22,9 +22,9 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: isDark ? '#1f2937' : 'white',
+          backgroundColor: colors.card,
           borderTopWidth: 1,
-          borderTopColor: isDark ? '#374151' : '#f3f4f6',
+          borderTopColor: colors.border,
           paddingBottom: 5,
           paddingTop: 5,
           height: 60,
@@ -34,7 +34,7 @@ export default function TabLayout() {
           fontWeight: '500',
         },
         headerStyle: {
-          backgroundColor: isDark ? '#1f2937' : 'white',
+          backgroundColor: colors.card,
         },
         headerTitleStyle: {
           fontWeight: 'bold',

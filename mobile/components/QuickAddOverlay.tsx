@@ -15,6 +15,7 @@ import { Picker } from '@react-native-picker/picker';
 import { usePaymentStore } from '../store/paymentStore';
 import { useAuthStore } from '../store/authStore';
 import { sectionService, categoryService, transactionService } from '../services/api';
+import { useTheme } from './ThemeProvider';
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-IN', {
@@ -39,6 +40,7 @@ interface Category {
 export function QuickAddOverlay() {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuthStore();
+  const { colors, isDark } = useTheme();
   const { showQuickAdd, currentPayment, hidePaymentOverlay, dismissPayment, clearCurrentPayment } =
     usePaymentStore();
 
@@ -95,6 +97,7 @@ export function QuickAddOverlay() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['sections'] });
       Alert.alert('Success', 'Transaction recorded!');
       handleClose();
@@ -140,107 +143,136 @@ export function QuickAddOverlay() {
     return null;
   }
 
+  const amountColor = currentPayment.type === 'credit' ? colors.income : colors.expense;
+
   return (
     <Modal visible={showQuickAdd} transparent animationType="none">
       <View className="flex-1 bg-black/50 justify-end">
         <Animated.View
-          style={{ transform: [{ translateY: slideAnim }] }}
-          className="bg-white rounded-t-3xl"
+          style={{
+            transform: [{ translateY: slideAnim }],
+            backgroundColor: colors.card,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+          }}
         >
-          {/* Handle bar */}
           <View className="items-center pt-3 pb-2">
-            <View className="w-10 h-1 bg-gray-300 rounded-full" />
+            <View className="w-10 h-1 rounded-full" style={{ backgroundColor: colors.border }} />
           </View>
 
-          {/* Header */}
-          <View className="flex-row items-center justify-between px-4 pb-3 border-b border-gray-100">
+          <View
+            className="flex-row items-center justify-between px-4 pb-3 border-b"
+            style={{ borderColor: colors.border }}
+          >
             <View className="flex-row items-center">
-              <View className="w-10 h-10 bg-green-100 rounded-full items-center justify-center">
+              <View
+                className="w-10 h-10 rounded-full items-center justify-center"
+                style={{ backgroundColor: amountColor + '22' }}
+              >
                 <Ionicons
                   name={currentPayment.type === 'credit' ? 'arrow-down' : 'arrow-up'}
                   size={20}
-                  color={currentPayment.type === 'credit' ? '#22c55e' : '#ef4444'}
+                  color={amountColor}
                 />
               </View>
               <View className="ml-3">
-                <Text className="text-gray-500 text-xs">Payment Detected</Text>
-                <Text className="text-gray-900 font-semibold">
+                <Text style={{ color: colors.textMuted }} className="text-xs">Payment Detected</Text>
+                <Text style={{ color: colors.text }} className="font-semibold">
                   {currentPayment.bank || 'UPI'} Transaction
                 </Text>
               </View>
             </View>
             <TouchableOpacity onPress={handleDismiss} className="p-2">
-              <Ionicons name="close" size={24} color="#9ca3af" />
+              <Ionicons name="close" size={24} color={colors.icon} />
             </TouchableOpacity>
           </View>
 
           <ScrollView className="p-4 max-h-96">
-            {/* Amount Display */}
             <View className="items-center py-4">
-              <Text
-                className={`text-4xl font-bold ${
-                  currentPayment.type === 'credit' ? 'text-green-600' : 'text-red-600'
-                }`}
-              >
+              <Text style={{ color: amountColor }} className="text-4xl font-bold">
                 {currentPayment.type === 'credit' ? '+' : '-'}
                 {formatCurrency(currentPayment.amount)}
               </Text>
-              <Text className="text-gray-500 mt-1" numberOfLines={2}>
+              <Text style={{ color: colors.textSecondary }} className="mt-1" numberOfLines={2}>
                 {currentPayment.merchant}
               </Text>
               {currentPayment.upiId && (
-                <Text className="text-gray-400 text-xs mt-1">{currentPayment.upiId}</Text>
+                <Text style={{ color: colors.textMuted }} className="text-xs mt-1">
+                  {currentPayment.upiId}
+                </Text>
               )}
             </View>
 
-            {/* Account Selection */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-1">Account</Text>
-              <View className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+              <Text style={{ color: colors.text }} className="text-sm font-medium mb-1">Account</Text>
+              <View
+                className="rounded-lg overflow-hidden"
+                style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel2 }}
+              >
                 <Picker
                   selectedValue={selectedSection}
                   onValueChange={(value) => setSelectedSection(value)}
+                  style={{ color: colors.text }}
+                  dropdownIconColor={colors.icon}
                 >
-                  <Picker.Item label="Select account..." value="" />
+                  <Picker.Item label="Select account..." value="" color={colors.textMuted} />
                   {sections.map((section: Section) => (
-                    <Picker.Item key={section._id} label={section.name} value={section._id} />
+                    <Picker.Item
+                      key={section._id}
+                      label={section.name}
+                      value={section._id}
+                      color={isDark ? '#f9fafb' : '#111827'}
+                    />
                   ))}
                 </Picker>
               </View>
             </View>
 
-            {/* Category Selection */}
             <View className="mb-4">
-              <Text className="text-sm font-medium text-gray-700 mb-1">Category</Text>
-              <View className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+              <Text style={{ color: colors.text }} className="text-sm font-medium mb-1">Category</Text>
+              <View
+                className="rounded-lg overflow-hidden"
+                style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel2 }}
+              >
                 <Picker
                   selectedValue={selectedCategory}
                   onValueChange={(value) => setSelectedCategory(value)}
+                  style={{ color: colors.text }}
+                  dropdownIconColor={colors.icon}
                 >
-                  <Picker.Item label="Select category (optional)" value="" />
+                  <Picker.Item label="Select category (optional)" value="" color={colors.textMuted} />
                   {categories.map((category: Category) => (
-                    <Picker.Item key={category._id} label={category.name} value={category._id} />
+                    <Picker.Item
+                      key={category._id}
+                      label={category.name}
+                      value={category._id}
+                      color={isDark ? '#f9fafb' : '#111827'}
+                    />
                   ))}
                 </Picker>
               </View>
             </View>
 
-            {/* Quick Category Buttons */}
             <View className="flex-row flex-wrap gap-2 mb-4">
               {categories.slice(0, 6).map((category: Category) => (
                 <TouchableOpacity
                   key={category._id}
-                  className={`px-3 py-2 rounded-full border ${
-                    selectedCategory === category._id
-                      ? 'border-sky-500 bg-sky-50'
-                      : 'border-gray-200 bg-white'
-                  }`}
+                  className="px-3 py-2 rounded-full border"
+                  style={{
+                    borderColor:
+                      selectedCategory === category._id ? colors.primary : colors.border,
+                    backgroundColor:
+                      selectedCategory === category._id
+                        ? colors.primary + '22'
+                        : colors.panel2,
+                  }}
                   onPress={() => setSelectedCategory(category._id)}
                 >
                   <Text
-                    className={
-                      selectedCategory === category._id ? 'text-sky-600' : 'text-gray-600'
-                    }
+                    style={{
+                      color:
+                        selectedCategory === category._id ? colors.primary : colors.textSecondary,
+                    }}
                   >
                     {category.name}
                   </Text>
@@ -248,18 +280,21 @@ export function QuickAddOverlay() {
               ))}
             </View>
 
-            {/* Action Buttons */}
             <View className="flex-row gap-3 pb-6">
               <TouchableOpacity
-                className="flex-1 py-4 bg-gray-100 rounded-xl items-center"
+                className="flex-1 py-4 rounded-xl items-center"
+                style={{ backgroundColor: colors.panel2 }}
                 onPress={handleDismiss}
               >
-                <Text className="text-gray-600 font-medium">Skip</Text>
+                <Text style={{ color: colors.textSecondary }} className="font-medium">Skip</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className={`flex-1 py-4 rounded-xl items-center ${
-                  createMutation.isPending ? 'bg-sky-300' : 'bg-sky-500'
-                }`}
+                className="flex-1 py-4 rounded-xl items-center"
+                style={{
+                  backgroundColor: createMutation.isPending
+                    ? colors.primary + '88'
+                    : colors.primary,
+                }}
                 onPress={handleSave}
                 disabled={createMutation.isPending}
               >

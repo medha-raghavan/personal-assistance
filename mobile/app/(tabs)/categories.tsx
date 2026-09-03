@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { categoryService } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
+import { PageHeader } from '../../components/ui';
 
 const COLOR_OPTIONS = [
   '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6',
@@ -266,11 +267,18 @@ export default function CategoriesScreen() {
 
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
-      {/* Search Bar */}
+      <View className="px-4 pt-4">
+        <PageHeader
+          title="Categories"
+          subtitle="Keywords and colors for auto-tagging"
+          actionLabel="Add"
+          onAction={openAddModal}
+        />
+      </View>
       <View style={{ backgroundColor: colors.card, borderColor: colors.border }} className="px-4 py-3 border-b">
-        <View 
+        <View
           className="flex-row items-center rounded-lg px-3 py-2"
-          style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }}
+          style={{ backgroundColor: colors.panel2 }}
         >
           <Ionicons name="search" size={18} color={colors.textMuted} />
           <TextInput
@@ -293,13 +301,13 @@ export default function CategoriesScreen() {
         data={filteredCategories}
         keyExtractor={(item) => item._id}
         renderItem={renderCategory}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} />}
         ListEmptyComponent={
           <View className="items-center py-12">
             <Ionicons name="pricetags-outline" size={48} color={colors.textMuted} />
             <Text style={{ color: colors.textMuted }} className="mt-4 text-center">
-              {searchQuery 
+              {searchQuery
                 ? 'No categories match your search.'
                 : 'No categories yet.\nCreate one to organize your transactions.'}
             </Text>
@@ -308,7 +316,8 @@ export default function CategoriesScreen() {
       />
 
       <TouchableOpacity
-        className="absolute bottom-6 right-6 w-14 h-14 bg-sky-500 rounded-full items-center justify-center shadow-lg"
+        className="absolute bottom-6 right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg"
+        style={{ backgroundColor: colors.primary }}
         onPress={openAddModal}
       >
         <Ionicons name="add" size={28} color="white" />

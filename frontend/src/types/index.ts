@@ -251,16 +251,21 @@ export interface DashboardSummary {
     expense: number;
     topCategories: Array<{ name: string; amount: number }>;
   }>;
-  topTransactions: Array<{
-    id: string;
-    date: string;
-    description: string;
-    tags: string[];
-    categoryName: string;
-    accountName: string;
-    amount: number;
-    type: 'credit' | 'debit';
-  }>;
+  topTransactions: {
+    expense: DashboardTopTransaction[];
+    income: DashboardTopTransaction[];
+  };
+}
+
+export interface DashboardTopTransaction {
+  id: string;
+  date: string;
+  description: string;
+  tags: string[];
+  categoryName: string;
+  accountName: string;
+  amount: number;
+  type: 'credit' | 'debit';
 }
 
 export interface ParsedTransaction {

@@ -454,6 +454,8 @@ export async function getSummary(
     const accountCatMatch: MatchFilter | null = type === 'credit'
       ? null
       : { ...matchIgnoreAccount, type: 'debit' };
+    const topExpenseMatch: MatchFilter = { ...matchIgnoreType, type: 'debit' };
+    const topIncomeMatch: MatchFilter = { ...matchIgnoreType, type: 'credit' };
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
@@ -466,7 +468,8 @@ export async function getSummary(
       trendRows,
       accountStatRows,
       accountCatRows,
-      topTxDocs,
+      topExpenseDocs,
+      topIncomeDocs,
     ] = await Promise.all([
       Section.find({ userId: userObjectId }).lean(),
       Category.find({ userId: userObjectId }).sort({ name: 1 }).lean(),
@@ -558,7 +561,13 @@ export async function getSummary(
             { $project: { cats: { $slice: ['$cats', 3] } } },
           ])
         : Promise.resolve([] as Array<{ _id: mongoose.Types.ObjectId; cats: Array<{ categoryId?: mongoose.Types.ObjectId; amount: number }> }>),
-      Transaction.find(match)
+      Transaction.find(topExpenseMatch)
+        .populate('sectionId', 'name label')
+        .populate('categoryId', 'name')
+        .sort({ amount: -1 })
+        .limit(10)
+        .lean(),
+      Transaction.find(topIncomeMatch)
         .populate('sectionId', 'name label')
         .populate('categoryId', 'name')
         .sort({ amount: -1 })
@@ -721,7 +730,7 @@ export async function getSummary(
       };
     });
 
-    const topTransactions = topTxDocs.map((t) => {
+    const mapTopTx = (t: typeof topExpenseDocs[number]) => {
       const section = t.sectionId as unknown as { name?: string; label?: string } | null;
       const category = t.categoryId as unknown as { name?: string } | null;
       return {
@@ -734,7 +743,11 @@ export async function getSummary(
         amount: t.amount,
         type: t.type,
       };
-    });
+    };
+    const topTransactions = {
+      expense: topExpenseDocs.map(mapTopTx),
+      income: topIncomeDocs.map(mapTopTx),
+    };
 
     res.json({
       success: true,

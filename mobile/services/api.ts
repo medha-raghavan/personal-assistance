@@ -106,6 +106,87 @@ export const authService = {
 };
 
 // Dashboard Service
+export type DashboardSummaryPeriod = '7' | '30' | '90' | '365' | 'all' | 'custom';
+
+export interface DashboardSummaryFilters {
+  period: DashboardSummaryPeriod;
+  sectionId?: string;
+  type?: 'all' | 'credit' | 'debit';
+  categoryIds?: string[];
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface DashboardSummary {
+  meta: { accountCount: number; periodLabel: string; subtitle: string };
+  accounts: Array<{ id: string; name: string; label: string; type: string; balance: number }>;
+  categories: Array<{ id: string; name: string; icon?: string; color?: string }>;
+  hero: {
+    totalBalance: number;
+    income: number;
+    expense: number;
+    net: number;
+    savingsRate: number;
+    incomeCount: number;
+    expenseCount: number;
+  };
+  dayOfWeek: {
+    days: Array<{ label: string; amount: number; count: number; isWeekend: boolean }>;
+    insight: {
+      peakDay: string;
+      peakAmount: number;
+      troughDay: string;
+      weekendsHigher: boolean;
+      skewPercent: number;
+    } | null;
+  };
+  categoryBreakdown: {
+    mode: 'expense' | 'income';
+    total: number;
+    items: Array<{
+      id: string | null;
+      name: string;
+      icon?: string;
+      color: string;
+      amount: number;
+      percentage: number;
+    }>;
+  };
+  monthlyTrend: Array<{ period: string; label: string; income: number; expense: number }>;
+  accountBreakdown: Array<{
+    id: string;
+    name: string;
+    label: string;
+    balance: number;
+    dimmed: boolean;
+    income: number;
+    expense: number;
+    topCategories: Array<{ name: string; amount: number }>;
+  }>;
+  topTransactions: {
+    expense: Array<{
+      id: string;
+      date: string;
+      description: string;
+      tags: string[];
+      categoryName: string;
+      accountName: string;
+      amount: number;
+      type: 'credit' | 'debit';
+    }>;
+    income: Array<{
+      id: string;
+      date: string;
+      description: string;
+      tags: string[];
+      categoryName: string;
+      accountName: string;
+      amount: number;
+      type: 'credit' | 'debit';
+    }>;
+  };
+}
+
 export const dashboardService = {
   async getOverview() {
     const response = await api.get('/dashboard/overview');
@@ -119,6 +200,22 @@ export const dashboardService = {
 
   async getCategoryBreakdown() {
     const response = await api.get('/dashboard/category-breakdown');
+    return response.data.data;
+  },
+
+  async getSummary(filters: DashboardSummaryFilters): Promise<DashboardSummary> {
+    const params = new URLSearchParams();
+    params.set('period', filters.period);
+    if (filters.sectionId) params.set('sectionId', filters.sectionId);
+    if (filters.type && filters.type !== 'all') params.set('type', filters.type);
+    if (filters.categoryIds && filters.categoryIds.length > 0) {
+      params.set('categoryIds', filters.categoryIds.join(','));
+    }
+    if (filters.period === 'custom') {
+      if (filters.startDate) params.set('startDate', filters.startDate);
+      if (filters.endDate) params.set('endDate', filters.endDate);
+    }
+    const response = await api.get(`/dashboard/summary?${params.toString()}`);
     return response.data.data;
   },
 };
@@ -458,6 +555,33 @@ export const taxService = {
   async calculate(fy: string) {
     const response = await api.get(`/tax/calculate/${fy}`);
     return response.data.data;
+  },
+
+  async parseSalarySlip(file: { uri: string; name: string; type?: string }) {
+    const formData = new FormData();
+    formData.append('file', {
+      uri: file.uri,
+      name: file.name || 'salary-slip.pdf',
+      type: file.type || 'application/pdf',
+    } as unknown as Blob);
+    const response = await api.post('/tax/parse-salary-slip', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data.data as {
+      basic: number;
+      hra: number;
+      lta: number;
+      specialAllowance: number;
+      otherAllowances: number;
+      grossIncome: number;
+      pf: number;
+      professionalTax: number;
+      incomeTax: number;
+      otherDeductions: number;
+      totalDeductions: number;
+      netSalary: number;
+      message?: string;
+    };
   },
 
   async getSlabs(fy: string) {

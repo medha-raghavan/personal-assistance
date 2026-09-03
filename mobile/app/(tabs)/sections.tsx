@@ -9,11 +9,20 @@ import {
   Alert,
   Modal,
   ScrollView,
+  Switch,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { sectionService } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
+import { PageHeader } from '../../components/ui';
+
+const PARSER_TYPES = [
+  { value: 'manual', label: 'Manual Entry Only' },
+  { value: 'hdfc_csv', label: 'HDFC CSV' },
+  { value: 'icici_pdf', label: 'ICICI PDF' },
+  { value: 'generic_xls', label: 'Generic Excel' },
+];
 
 const SECTION_TYPES = [
   { value: 'checking', label: 'Bank Account', icon: 'business-outline', color: '#3b82f6' },
@@ -53,6 +62,7 @@ export default function SectionsScreen() {
     type: 'checking',
     balance: '0',
     uploadEnabled: true,
+    parserType: 'manual',
   });
 
   const { data: sections = [], isLoading, refetch } = useQuery({
@@ -65,10 +75,13 @@ export default function SectionsScreen() {
       sectionService.create({
         ...data,
         balance: parseFloat(data.balance),
+        uploadEnabled: data.uploadEnabled,
+        parserConfig: { type: data.parserType },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sections'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       closeModal();
       Alert.alert('Success', 'Section created successfully');
     },
@@ -82,10 +95,13 @@ export default function SectionsScreen() {
       sectionService.update(id, {
         ...data,
         balance: parseFloat(data.balance),
+        uploadEnabled: data.uploadEnabled,
+        parserConfig: { type: data.parserType },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sections'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       closeModal();
       Alert.alert('Success', 'Section updated successfully');
     },
@@ -99,6 +115,7 @@ export default function SectionsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sections'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       Alert.alert('Success', 'Section deleted');
     },
     onError: (error: any) => {
@@ -114,6 +131,7 @@ export default function SectionsScreen() {
       type: 'checking',
       balance: '0',
       uploadEnabled: true,
+      parserType: 'manual',
     });
     setShowModal(true);
   };
@@ -126,6 +144,7 @@ export default function SectionsScreen() {
       type: section.type,
       balance: section.balance.toString(),
       uploadEnabled: section.uploadEnabled,
+      parserType: section.parserConfig?.type || 'manual',
     });
     setShowModal(true);
   };
@@ -182,6 +201,11 @@ export default function SectionsScreen() {
               <Text style={{ color: colors.text }} className="font-semibold text-base">{item.name}</Text>
               {item.label && <Text style={{ color: colors.textMuted }} className="text-sm">{item.label}</Text>}
               <Text style={{ color: colors.textMuted }} className="text-xs mt-1">{typeInfo.label}</Text>
+              {item.uploadEnabled && (
+                <Text style={{ color: colors.primary }} className="text-xs mt-1">
+                  Upload · {item.parserConfig?.type || 'manual'}
+                </Text>
+              )}
             </View>
           </View>
           <View className="items-end">
@@ -225,7 +249,15 @@ export default function SectionsScreen() {
         data={sections}
         keyExtractor={(item) => item._id}
         renderItem={renderSection}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        ListHeaderComponent={
+          <PageHeader
+            title="Accounts"
+            subtitle="Bank accounts, cards, and wallets"
+            actionLabel="Add"
+            onAction={openAddModal}
+          />
+        }
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} />}
         ListEmptyComponent={
           <View className="items-center py-12">
@@ -238,7 +270,8 @@ export default function SectionsScreen() {
       />
 
       <TouchableOpacity
-        className="absolute bottom-6 right-6 w-14 h-14 bg-sky-500 rounded-full items-center justify-center shadow-lg"
+        className="absolute bottom-6 right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg"
+        style={{ backgroundColor: colors.primary }}
         onPress={openAddModal}
       >
         <Ionicons name="add" size={28} color="white" />
@@ -333,6 +366,36 @@ export default function SectionsScreen() {
                   keyboardType="numeric"
                 />
               </View>
+
+              <View className="mb-4 flex-row items-center justify-between">
+                <Text style={{ color: colors.text }} className="text-sm font-medium">Enable statement upload</Text>
+                <Switch
+                  value={formData.uploadEnabled}
+                  onValueChange={(uploadEnabled) => setFormData({ ...formData, uploadEnabled })}
+                  trackColor={{ true: colors.primary }}
+                />
+              </View>
+
+              {formData.uploadEnabled && (
+                <View className="mb-4">
+                  <Text style={{ color: colors.text }} className="text-sm font-medium mb-2">Parser Type</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {PARSER_TYPES.map((p) => (
+                      <TouchableOpacity
+                        key={p.value}
+                        className="px-3 py-2 rounded-lg border"
+                        style={{
+                          backgroundColor: formData.parserType === p.value ? colors.primary + '22' : colors.panel2,
+                          borderColor: formData.parserType === p.value ? colors.primary : colors.border,
+                        }}
+                        onPress={() => setFormData({ ...formData, parserType: p.value })}
+                      >
+                        <Text style={{ color: formData.parserType === p.value ? colors.primary : colors.text }}>{p.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
 
               <TouchableOpacity
                 className={`py-4 rounded-xl items-center mb-6 ${

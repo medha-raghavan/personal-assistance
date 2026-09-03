@@ -2,15 +2,22 @@ import React, { createContext, useContext, useEffect, ReactNode } from 'react';
 import { View } from 'react-native';
 import { useThemeStore, ThemeMode } from '../store/themeStore';
 
-interface ThemeColors {
+export interface ThemeColors {
   background: string;
   card: string;
+  panel: string;
+  panel2: string;
   text: string;
   textSecondary: string;
   textMuted: string;
   border: string;
   primary: string;
   icon: string;
+  income: string;
+  expense: string;
+  savings: string;
+  accent: string;
+  danger: string;
 }
 
 interface ThemeContextType {
@@ -24,23 +31,37 @@ interface ThemeContextType {
 const lightColors: ThemeColors = {
   background: '#f9fafb',
   card: '#ffffff',
+  panel: '#ffffff',
+  panel2: '#f3f4f6',
   text: '#111827',
   textSecondary: '#6b7280',
   textMuted: '#9ca3af',
-  border: '#f3f4f6',
+  border: '#e5e7eb',
   primary: '#0ea5e9',
   icon: '#6b7280',
+  income: '#16a34a',
+  expense: '#dc2626',
+  savings: '#d97706',
+  accent: '#0ea5e9',
+  danger: '#ef4444',
 };
 
 const darkColors: ThemeColors = {
   background: '#111827',
   card: '#1f2937',
+  panel: '#1f2937',
+  panel2: '#374151',
   text: '#f9fafb',
   textSecondary: '#9ca3af',
   textMuted: '#6b7280',
   border: '#374151',
   primary: '#0ea5e9',
   icon: '#9ca3af',
+  income: '#4ade80',
+  expense: '#f87171',
+  savings: '#fbbf24',
+  accent: '#7c8cf0',
+  danger: '#f87171',
 };
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);

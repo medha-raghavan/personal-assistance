@@ -4,8 +4,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
-import { useThemeStore } from '../store/themeStore';
-import { ThemeProvider } from '../components/ThemeProvider';
+import { ThemeProvider, useTheme } from '../components/ThemeProvider';
 import { QuickAddOverlay } from '../components/QuickAddOverlay';
 import { initializeSmsListener, stopSmsListener } from '../services/smsListener';
 import { refreshDashboardWidget } from '../services/widgetRefresh';
@@ -21,8 +20,7 @@ const queryClient = new QueryClient({
 
 function RootLayoutContent() {
   const { initialize, isLoading, isAuthenticated } = useAuthStore();
-  const { colorScheme } = useThemeStore();
-  const isDark = colorScheme === 'dark';
+  const { isDark, colors } = useTheme();
 
   useEffect(() => {
     initialize();
@@ -65,9 +63,9 @@ function RootLayoutContent() {
           options={{ 
             headerShown: true,
             headerBackTitle: 'Trips',
-            headerStyle: { backgroundColor: isDark ? '#1f2937' : 'white' },
-            headerTitleStyle: { fontWeight: 'bold', color: isDark ? '#f9fafb' : '#111827' },
-            headerTintColor: isDark ? '#f9fafb' : '#111827',
+            headerStyle: { backgroundColor: colors.card },
+            headerTitleStyle: { fontWeight: 'bold', color: colors.text },
+            headerTintColor: colors.text,
           }} 
         />
       </Stack>

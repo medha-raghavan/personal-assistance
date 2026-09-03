@@ -178,6 +178,7 @@ export default function TransactionsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['sections'] });
       Alert.alert('Success', 'Transaction deleted');
     },
@@ -191,6 +192,7 @@ export default function TransactionsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['sections'] });
       // Invalidate trip queries when transaction might be linked to a trip
       queryClient.invalidateQueries({ queryKey: ['trips'] });
@@ -212,6 +214,7 @@ export default function TransactionsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['sections'] });
       queryClient.invalidateQueries({ queryKey: ['trips'] });
       queryClient.invalidateQueries({ queryKey: ['trip-expenses'] });
@@ -398,21 +401,47 @@ export default function TransactionsScreen() {
 
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
-      {/* Totals */}
-      <View style={{ backgroundColor: colors.card, borderColor: colors.border }} className="px-4 py-3 border-b">
-        <View className="flex-row justify-between">
-          <View className="items-center flex-1">
+      <View className="px-4 pt-4 pb-2">
+        <View className="flex-row items-end justify-between gap-3 mb-3">
+          <View className="flex-1">
+            <Text style={{ color: colors.text }} className="text-xl font-bold">Transactions</Text>
+            <Text style={{ color: colors.textSecondary }} className="text-sm mt-1">
+              {(pagination.totalCount ?? pagination.total ?? 0)} transaction{(pagination.totalCount ?? pagination.total ?? 0) === 1 ? '' : 's'} found
+            </Text>
+          </View>
+          <View className="flex-row gap-2">
+            <TouchableOpacity
+              className="flex-row items-center px-3 py-2 rounded-lg"
+              style={{ backgroundColor: colors.panel2, borderWidth: 1, borderColor: colors.border }}
+              onPress={() => setShowUploadModal(true)}
+            >
+              <Ionicons name="cloud-upload-outline" size={16} color={colors.text} />
+              <Text style={{ color: colors.text }} className="font-semibold text-sm ml-1">Upload</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-row items-center px-3 py-2 rounded-lg"
+              style={{ backgroundColor: colors.primary }}
+              onPress={() => setShowAddModal(true)}
+            >
+              <Ionicons name="add" size={16} color="white" />
+              <Text className="text-white font-semibold text-sm ml-1">Add</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View className="flex-row gap-2">
+          <View className="flex-1 rounded-lg p-2.5" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}>
             <Text style={{ color: colors.textMuted }} className="text-xs">Income</Text>
-            <Text className="text-green-600 font-semibold">{formatCurrency(totals.income)}</Text>
+            <Text style={{ color: colors.income }} className="font-semibold mt-0.5">+{formatCurrency(totals.income)}</Text>
           </View>
-          <View className="items-center flex-1">
+          <View className="flex-1 rounded-lg p-2.5" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}>
             <Text style={{ color: colors.textMuted }} className="text-xs">Expense</Text>
-            <Text className="text-red-600 font-semibold">{formatCurrency(totals.expense)}</Text>
+            <Text style={{ color: colors.expense }} className="font-semibold mt-0.5">-{formatCurrency(totals.expense)}</Text>
           </View>
-          <View className="items-center flex-1">
+          <View className="flex-1 rounded-lg p-2.5" style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }}>
             <Text style={{ color: colors.textMuted }} className="text-xs">Net</Text>
             <Text
-              className={`font-semibold ${totals.net >= 0 ? 'text-green-600' : 'text-red-600'}`}
+              className="font-semibold mt-0.5"
+              style={{ color: totals.net >= 0 ? colors.income : colors.expense }}
             >
               {formatCurrency(totals.net)}
             </Text>
@@ -453,7 +482,7 @@ export default function TransactionsScreen() {
 
       {/* Search & Filter Bar */}
       <View style={{ backgroundColor: colors.card, borderColor: colors.border }} className="px-4 py-3 border-b flex-row items-center gap-2">
-        <View className="flex-1 flex-row items-center rounded-lg px-3 py-2" style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }}>
+        <View className="flex-1 flex-row items-center rounded-lg px-3 py-2" style={{ backgroundColor: colors.panel2 }}>
           <TouchableOpacity onPress={() => handleSearch()} hitSlop={8}>
             <Ionicons name="search" size={18} color={colors.textMuted} />
           </TouchableOpacity>
@@ -495,7 +524,7 @@ export default function TransactionsScreen() {
               setViewMode('list');
             }}
             className="px-2.5 py-1.5 rounded-md"
-            style={viewMode === 'list' ? { backgroundColor: '#0ea5e9' } : {}}
+            style={viewMode === 'list' ? { backgroundColor: colors.primary } : {}}
           >
             <Ionicons name="list" size={18} color={viewMode === 'list' ? 'white' : colors.icon} />
           </TouchableOpacity>
@@ -505,7 +534,7 @@ export default function TransactionsScreen() {
               setViewMode('calendar');
             }}
             className="px-2.5 py-1.5 rounded-md"
-            style={viewMode === 'calendar' ? { backgroundColor: '#0ea5e9' } : {}}
+            style={viewMode === 'calendar' ? { backgroundColor: colors.primary } : {}}
           >
             <Ionicons name="calendar" size={18} color={viewMode === 'calendar' ? 'white' : colors.icon} />
           </TouchableOpacity>
@@ -602,8 +631,8 @@ export default function TransactionsScreen() {
               router.push('/(tabs)/categories');
             }}
           >
-            <View className="bg-white rounded-lg px-3 py-2 mr-3 shadow-md">
-              <Text className="text-gray-800 font-medium">Categories</Text>
+            <View className="rounded-lg px-3 py-2 mr-3 shadow-md" style={{ backgroundColor: colors.card }}>
+              <Text style={{ color: colors.text }} className="font-medium">Categories</Text>
             </View>
             <View className="w-12 h-12 rounded-full bg-orange-500 items-center justify-center shadow-lg">
               <Ionicons name="pricetags" size={22} color="white" />
@@ -616,8 +645,8 @@ export default function TransactionsScreen() {
               router.push('/(tabs)/sections');
             }}
           >
-            <View className="bg-white rounded-lg px-3 py-2 mr-3 shadow-md">
-              <Text className="text-gray-800 font-medium">Accounts</Text>
+            <View className="rounded-lg px-3 py-2 mr-3 shadow-md" style={{ backgroundColor: colors.card }}>
+              <Text style={{ color: colors.text }} className="font-medium">Accounts</Text>
             </View>
             <View className="w-12 h-12 rounded-full bg-blue-500 items-center justify-center shadow-lg">
               <Ionicons name="wallet" size={22} color="white" />
@@ -630,8 +659,8 @@ export default function TransactionsScreen() {
               setShowUploadModal(true);
             }}
           >
-            <View className="bg-white rounded-lg px-3 py-2 mr-3 shadow-md">
-              <Text className="text-gray-800 font-medium">Upload Statement</Text>
+            <View className="rounded-lg px-3 py-2 mr-3 shadow-md" style={{ backgroundColor: colors.card }}>
+              <Text style={{ color: colors.text }} className="font-medium">Upload Statement</Text>
             </View>
             <View className="w-12 h-12 rounded-full bg-purple-500 items-center justify-center shadow-lg">
               <Ionicons name="cloud-upload" size={24} color="white" />
@@ -644,8 +673,8 @@ export default function TransactionsScreen() {
               setShowAddModal(true);
             }}
           >
-            <View className="bg-white rounded-lg px-3 py-2 mr-3 shadow-md">
-              <Text className="text-gray-800 font-medium">Add Transaction</Text>
+            <View className="rounded-lg px-3 py-2 mr-3 shadow-md" style={{ backgroundColor: colors.card }}>
+              <Text style={{ color: colors.text }} className="font-medium">Add Transaction</Text>
             </View>
             <View className="w-12 h-12 rounded-full bg-green-500 items-center justify-center shadow-lg">
               <Ionicons name="add" size={28} color="white" />
@@ -1001,6 +1030,7 @@ function AddTransactionModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['sections'] });
       Alert.alert('Success', 'Transaction added successfully');
       resetForm();
@@ -1298,6 +1328,7 @@ function UploadStatementModal({
       await uploadService.confirmUpload(uploadPreview.uploadId, indices);
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['sections'] });
       Alert.alert('Success', `${indices.length} transactions imported successfully`);
       handleClose();

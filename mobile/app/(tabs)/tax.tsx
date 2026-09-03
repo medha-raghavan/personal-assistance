@@ -14,8 +14,10 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { taxService, investmentService } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
+import { PillTabs, PageHeader } from '../../components/ui';
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-IN', {
@@ -156,9 +158,12 @@ export default function TaxScreen() {
 
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
+      <View className="px-4 pt-4">
+        <PageHeader title="Tax" subtitle="Salary slips, investments, and regime comparison" />
+      </View>
       {/* FY Selector */}
       <View style={{ backgroundColor: colors.card, borderColor: colors.border }} className="px-4 py-3 border-b">
-        <View className="rounded-lg overflow-hidden" style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: isDark ? '#374151' : '#f9fafb' }}>
+        <View className="rounded-lg overflow-hidden" style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panel2 }}>
           <Picker
             selectedValue={selectedFY}
             onValueChange={(value) => setSelectedFY(value)}
@@ -166,28 +171,24 @@ export default function TaxScreen() {
             dropdownIconColor={colors.icon}
           >
             {FY_OPTIONS.map(opt => (
-              <Picker.Item key={opt.value} label={opt.label} value={opt.value} color="#111827" />
+              <Picker.Item key={opt.value} label={opt.label} value={opt.value} color={isDark ? '#f9fafb' : '#111827'} />
             ))}
           </Picker>
         </View>
       </View>
 
       {/* Tabs */}
-      <View style={{ backgroundColor: colors.card }} className="flex-row border-b" style={{ borderBottomColor: colors.border }}>
-        {(['overview', 'salary', 'investments', 'tips'] as TabType[]).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            className={`flex-1 py-3 items-center ${activeTab === tab ? 'border-b-2 border-sky-500' : ''}`}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text
-              className={`text-sm font-medium capitalize ${activeTab === tab ? 'text-sky-600' : ''}`}
-              style={activeTab !== tab ? { color: colors.textMuted } : {}}
-            >
-              {tab === 'tips' ? 'Tips' : tab}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View style={{ backgroundColor: colors.card, paddingHorizontal: 16, paddingTop: 12, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <PillTabs
+          tabs={[
+            { id: 'overview', label: 'Overview' },
+            { id: 'salary', label: 'Salary' },
+            { id: 'investments', label: 'Investments' },
+            { id: 'tips', label: 'Tax Tips' },
+          ]}
+          value={activeTab}
+          onChange={setActiveTab}
+        />
       </View>
 
       <ScrollView
@@ -556,6 +557,7 @@ function SalarySlipModal({
 }) {
   const queryClient = useQueryClient();
   const { isDark, colors } = useTheme();
+  const [parsing, setParsing] = useState(false);
   const [formData, setFormData] = useState({
     month: '',
     basic: '',
@@ -597,6 +599,40 @@ function SalarySlipModal({
       incomeTax: '',
       otherDeductions: '',
     });
+  };
+
+  const handleParsePdf = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/pdf',
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const file = result.assets[0];
+      setParsing(true);
+      const parsed = await taxService.parseSalarySlip({
+        uri: file.uri,
+        name: file.name || 'salary-slip.pdf',
+        type: file.mimeType || 'application/pdf',
+      });
+      setFormData((prev) => ({
+        ...prev,
+        basic: String(parsed.basic || ''),
+        hra: String(parsed.hra || ''),
+        lta: String(parsed.lta || ''),
+        specialAllowance: String(parsed.specialAllowance || ''),
+        otherAllowances: String(parsed.otherAllowances || ''),
+        pf: String(parsed.pf || ''),
+        professionalTax: String(parsed.professionalTax || ''),
+        incomeTax: String(parsed.incomeTax || ''),
+        otherDeductions: String(parsed.otherDeductions || ''),
+      }));
+      Alert.alert('Parsed', parsed.message || 'Salary slip fields filled from PDF.');
+    } catch (error: any) {
+      Alert.alert('Parse failed', error.response?.data?.error?.message || 'Could not parse PDF');
+    } finally {
+      setParsing(false);
+    }
   };
 
   const addMutation = useMutation({
@@ -651,6 +687,21 @@ function SalarySlipModal({
             </TouchableOpacity>
           </View>
           <ScrollView className="p-4">
+            <TouchableOpacity
+              onPress={handleParsePdf}
+              disabled={parsing}
+              className="mb-4 flex-row items-center justify-center py-3 rounded-lg"
+              style={{ backgroundColor: colors.primary + '22', borderWidth: 1, borderColor: colors.primary }}
+            >
+              {parsing ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <>
+                  <Ionicons name="document-outline" size={18} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontWeight: '600', marginLeft: 8 }}>Upload PDF salary slip</Text>
+                </>
+              )}
+            </TouchableOpacity>
             {/* Month */}
             <View className="mb-4">
               <Text style={{ color: colors.text }} className="text-sm font-medium mb-1">Month *</Text>

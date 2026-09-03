@@ -57,6 +57,7 @@ export function Dashboard() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [catOpen, setCatOpen] = useState(false);
+  const [topKind, setTopKind] = useState<'expense' | 'income'>('expense');
   const catRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -122,6 +123,7 @@ export function Dashboard() {
     setStartDate('');
     setEndDate('');
     setCatOpen(false);
+    setTopKind('expense');
   }
 
   function toggleCategory(id: string) {
@@ -156,6 +158,7 @@ export function Dashboard() {
   const trendMax = Math.max(1, ...data.monthlyTrend.flatMap((m) => [m.income, m.expense]));
   const hasDow = data.dayOfWeek.days.some((d) => d.count > 0);
   const insight = data.dayOfWeek.insight;
+  const rows = data.topTransactions[topKind];
 
   return (
     <div className="ledger-dash" style={{ opacity: isFetching ? 0.85 : 1 }}>
@@ -468,7 +471,23 @@ export function Dashboard() {
       <div className="card">
         <div className="card-head">
           <div className="card-title">Top transactions</div>
-          <div className="card-note">top {data.topTransactions.length} by amount</div>
+          <div className="tx-head-right">
+            <div className="seg">
+              <span
+                className={topKind === 'expense' ? 'active' : ''}
+                onClick={() => setTopKind('expense')}
+              >
+                Expenses
+              </span>
+              <span
+                className={topKind === 'income' ? 'active' : ''}
+                onClick={() => setTopKind('income')}
+              >
+                Income
+              </span>
+            </div>
+            <div className="card-note">top {rows.length} by amount</div>
+          </div>
         </div>
         <div className="table-scroll">
           <table>
@@ -483,14 +502,18 @@ export function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {data.topTransactions.length === 0 ? (
+              {rows.length === 0 ? (
                 <tr>
                   <td colSpan={6}>
-                    <div className="empty-note">No transactions match these filters</div>
+                    <div className="empty-note">
+                      {topKind === 'income'
+                        ? 'No income matches these filters'
+                        : 'No expenses match these filters'}
+                    </div>
                   </td>
                 </tr>
               ) : (
-                data.topTransactions.map((t, i) => {
+                rows.map((t, i) => {
                   const isIn = t.type === 'credit';
                   return (
                     <tr key={t.id}>

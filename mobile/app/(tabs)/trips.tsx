@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { tripService, Trip } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
+import { PageHeader } from '../../components/ui';
 
 function formatDate(dateString?: string): string {
   if (!dateString) return '';
@@ -177,8 +178,8 @@ export default function TripsScreen() {
             style={{ backgroundColor: isDark ? '#0c4a6e' : '#e0f2fe' }}
             onPress={() => router.push(`/trip/${item._id}`)}
           >
-            <Ionicons name="eye-outline" size={18} color="#0ea5e9" />
-            <Text className="text-sky-500 font-medium ml-2">View Details</Text>
+            <Ionicons name="eye-outline" size={18} color={colors.primary} />
+            <Text style={{ color: colors.primary }} className="font-medium ml-2">View Details</Text>
           </TouchableOpacity>
           <TouchableOpacity
             className="p-2"
@@ -198,6 +199,9 @@ export default function TripsScreen() {
         keyExtractor={(item) => item._id}
         renderItem={renderTrip}
         contentContainerStyle={{ padding: 16 }}
+        ListHeaderComponent={
+          <PageHeader title="Trips & Splits" subtitle="Shared expenses and settlements" />
+        }
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} />}
         ListEmptyComponent={
           <View className="items-center py-12">
@@ -210,7 +214,8 @@ export default function TripsScreen() {
       />
 
       <TouchableOpacity
-        className="absolute bottom-6 right-6 w-14 h-14 bg-sky-500 rounded-full items-center justify-center shadow-lg"
+        className="absolute bottom-6 right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg"
+        style={{ backgroundColor: colors.primary }}
         onPress={() => setShowAddModal(true)}
       >
         <Ionicons name="add" size={28} color="white" />
