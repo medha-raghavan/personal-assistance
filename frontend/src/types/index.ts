@@ -167,6 +167,102 @@ export interface CategoryBreakdown {
   }>;
 }
 
+export interface DashboardSummaryFilters {
+  period: '7' | '30' | '90' | '365' | 'all' | 'custom';
+  sectionId?: string;
+  type?: 'all' | 'credit' | 'debit';
+  categoryIds?: string[];
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface DashboardSummaryAccount {
+  id: string;
+  name: string;
+  label: string;
+  type: string;
+  balance: number;
+}
+
+export interface DashboardSummaryCategory {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+}
+
+export interface DashboardSummary {
+  meta: {
+    accountCount: number;
+    periodLabel: string;
+    subtitle: string;
+  };
+  accounts: DashboardSummaryAccount[];
+  categories: DashboardSummaryCategory[];
+  hero: {
+    totalBalance: number;
+    income: number;
+    expense: number;
+    net: number;
+    savingsRate: number;
+    incomeCount: number;
+    expenseCount: number;
+  };
+  dayOfWeek: {
+    days: Array<{
+      label: string;
+      amount: number;
+      count: number;
+      isWeekend: boolean;
+    }>;
+    insight: {
+      peakDay: string;
+      peakAmount: number;
+      troughDay: string;
+      weekendsHigher: boolean;
+      skewPercent: number;
+    } | null;
+  };
+  categoryBreakdown: {
+    mode: 'expense' | 'income';
+    total: number;
+    items: Array<{
+      id: string | null;
+      name: string;
+      icon?: string;
+      color: string;
+      amount: number;
+      percentage: number;
+    }>;
+  };
+  monthlyTrend: Array<{
+    period: string;
+    label: string;
+    income: number;
+    expense: number;
+  }>;
+  accountBreakdown: Array<{
+    id: string;
+    name: string;
+    label: string;
+    balance: number;
+    dimmed: boolean;
+    income: number;
+    expense: number;
+    topCategories: Array<{ name: string; amount: number }>;
+  }>;
+  topTransactions: Array<{
+    id: string;
+    date: string;
+    description: string;
+    tags: string[];
+    categoryName: string;
+    accountName: string;
+    amount: number;
+    type: 'credit' | 'debit';
+  }>;
+}
+
 export interface ParsedTransaction {
   transactionDate: string;
   valueDate?: string;

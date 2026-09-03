@@ -4,6 +4,7 @@ import {
   getTrends,
   getCategoryBreakdown,
   getCalendarHeatmap,
+  getSummary,
 } from '../controllers/dashboard.controller.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -15,5 +16,6 @@ router.get('/overview', getOverview);
 router.get('/trends', getTrends);
 router.get('/category-breakdown', getCategoryBreakdown);
 router.get('/calendar-heatmap', getCalendarHeatmap);
+router.get('/summary', getSummary);
 
 export default router;
