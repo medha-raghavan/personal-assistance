@@ -226,8 +226,13 @@ export default function TransactionsScreen() {
     },
   });
 
-  const handleSearch = useCallback(() => {
-    setFilters((prev) => ({ ...prev, search: searchQuery, page: 1 }));
+  const handleSearch = useCallback((query?: string) => {
+    const keyword = (query ?? searchQuery).trim();
+    setFilters((prev) => ({
+      ...prev,
+      keyword: keyword || undefined,
+      page: 1,
+    }));
   }, [searchQuery]);
 
   const clearFilters = () => {
@@ -309,7 +314,7 @@ export default function TransactionsScreen() {
   };
 
   const hasActiveFilters = !!(
-    filters.search ||
+    filters.keyword ||
     filters.sectionId ||
     filters.categoryId ||
     filters.type ||
@@ -449,7 +454,9 @@ export default function TransactionsScreen() {
       {/* Search & Filter Bar */}
       <View style={{ backgroundColor: colors.card, borderColor: colors.border }} className="px-4 py-3 border-b flex-row items-center gap-2">
         <View className="flex-1 flex-row items-center rounded-lg px-3 py-2" style={{ backgroundColor: isDark ? '#374151' : '#f3f4f6' }}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <TouchableOpacity onPress={() => handleSearch()} hitSlop={8}>
+            <Ionicons name="search" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
           <TextInput
             className="flex-1 ml-2"
             style={{ color: colors.text }}
@@ -457,14 +464,19 @@ export default function TransactionsScreen() {
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch}
+            onSubmitEditing={() => handleSearch()}
             returnKeyType="search"
           />
-          {searchQuery && (
-            <TouchableOpacity onPress={() => { setSearchQuery(''); handleSearch(); }}>
+          {searchQuery ? (
+            <TouchableOpacity
+              onPress={() => {
+                setSearchQuery('');
+                handleSearch('');
+              }}
+            >
               <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
         <TouchableOpacity
           className="p-2 rounded-lg"

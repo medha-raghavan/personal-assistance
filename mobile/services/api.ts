@@ -195,7 +195,7 @@ export const categoryService = {
 
 // Transaction Service
 export interface TransactionFilters {
-  search?: string;
+  keyword?: string;
   sectionId?: string;
   categoryId?: string;
   type?: 'credit' | 'debit';
