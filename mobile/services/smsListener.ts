@@ -1,94 +1,23 @@
-import { Platform, PermissionsAndroid, Alert, Linking } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
 import { parsePaymentSMS } from './paymentParser';
 import { usePaymentStore } from '../store/paymentStore';
 
-let smsSubscription: any = null;
-let SmsListener: any = null;
+type SmsSubscription = { remove: () => void };
 
-export async function initializeSmsListener(): Promise<boolean> {
+let smsSubscription: SmsSubscription | null = null;
+let smsApi: typeof import('expo-sms-listener') | null = null;
+
+function getSmsApi() {
   if (Platform.OS !== 'android') {
-    console.log('SMS listening is only available on Android');
-    return false;
+    return null;
   }
-
-  try {
-    SmsListener = require('react-native-android-sms-listener').default;
-  } catch (error) {
-    console.log('SMS listener library not installed. Install with: npm install react-native-android-sms-listener');
-    return false;
+  if (!smsApi) {
+    smsApi = require('expo-sms-listener');
   }
-
-  const hasPermission = await requestSmsPermission();
-  if (!hasPermission) {
-    console.log('SMS permission denied');
-    return false;
-  }
-
-  return startListening();
+  return smsApi;
 }
 
-async function requestSmsPermission(): Promise<boolean> {
-  if (Platform.OS !== 'android') return false;
-
-  try {
-    const granted = await PermissionsAndroid.request(
-      PermissionsAndroid.PERMISSIONS.RECEIVE_SMS,
-      {
-        title: 'SMS Permission',
-        message:
-          'This app needs access to your SMS messages to automatically detect payment transactions from banks and UPI apps.',
-        buttonNeutral: 'Ask Me Later',
-        buttonNegative: 'Cancel',
-        buttonPositive: 'OK',
-      }
-    );
-
-    if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-      const readGranted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.READ_SMS,
-        {
-          title: 'Read SMS Permission',
-          message: 'This app needs to read SMS messages to parse payment details.',
-          buttonNeutral: 'Ask Me Later',
-          buttonNegative: 'Cancel',
-          buttonPositive: 'OK',
-        }
-      );
-
-      return readGranted === PermissionsAndroid.RESULTS.GRANTED;
-    }
-
-    return false;
-  } catch (err) {
-    console.error('SMS permission error:', err);
-    return false;
-  }
-}
-
-function startListening(): boolean {
-  if (!SmsListener) {
-    console.log('SMS Listener not available');
-    return false;
-  }
-
-  if (smsSubscription) {
-    smsSubscription.remove();
-  }
-
-  try {
-    smsSubscription = SmsListener.addListener((message: { originatingAddress: string; body: string }) => {
-      handleIncomingSms(message.originatingAddress, message.body);
-    });
-
-    console.log('SMS listener started');
-    return true;
-  } catch (error) {
-    console.error('Failed to start SMS listener:', error);
-    return false;
-  }
-}
-
-function handleIncomingSms(sender: string, body: string) {
+export function handleIncomingSms(sender: string, body: string) {
   const { smsListenerEnabled, addPendingPayment } = usePaymentStore.getState();
 
   if (!smsListenerEnabled) {
@@ -110,36 +39,79 @@ function handleIncomingSms(sender: string, body: string) {
   }
 }
 
+export async function initializeSmsListener(): Promise<boolean> {
+  const api = getSmsApi();
+  if (!api) {
+    console.log('SMS listening is only available on Android');
+    return false;
+  }
+
+  const { granted } = await api.requestSmsPermissionAsync();
+  if (!granted) {
+    console.log('SMS permission denied');
+    return false;
+  }
+
+  try {
+    await api.startSmsListenerServiceAsync();
+  } catch (error) {
+    console.error('Failed to start SMS listener service:', error);
+    return false;
+  }
+
+  return startListening();
+}
+
+function startListening(): boolean {
+  const api = getSmsApi();
+  if (!api) {
+    console.log('SMS Listener not available');
+    return false;
+  }
+
+  if (smsSubscription) {
+    smsSubscription.remove();
+  }
+
+  try {
+    smsSubscription = api.addSmsListener((message) => {
+      handleIncomingSms(message.originatingAddress, message.body);
+    });
+
+    console.log('SMS listener started');
+    return true;
+  } catch (error) {
+    console.error('Failed to start SMS listener:', error);
+    return false;
+  }
+}
+
 export function stopSmsListener() {
   if (smsSubscription) {
     smsSubscription.remove();
     smsSubscription = null;
     console.log('SMS listener stopped');
   }
-}
 
-export function isSmsListenerAvailable(): boolean {
-  if (Platform.OS !== 'android') return false;
-
-  try {
-    require('react-native-android-sms-listener');
-    return true;
-  } catch {
-    return false;
+  const api = getSmsApi();
+  if (api) {
+    api.stopSmsListenerServiceAsync().catch((error: unknown) => {
+      console.error('Failed to stop SMS listener service:', error);
+    });
   }
 }
 
+export function isSmsListenerAvailable(): boolean {
+  return Platform.OS === 'android' && !!getSmsApi();
+}
+
 export async function checkSmsPermission(): Promise<boolean> {
-  if (Platform.OS !== 'android') return false;
+  const api = getSmsApi();
+  if (!api) return false;
 
   try {
-    const receiveGranted = await PermissionsAndroid.check(
-      PermissionsAndroid.PERMISSIONS.RECEIVE_SMS
-    );
-    const readGranted = await PermissionsAndroid.check(
-      PermissionsAndroid.PERMISSIONS.READ_SMS
-    );
-    return receiveGranted && readGranted;
+    const { granted } = await api.checkSmsPermissionAsync();
+    return granted;
   } catch {
     return false;
   }
@@ -149,17 +121,14 @@ export function showSmsSetupInstructions() {
   Alert.alert(
     'SMS Auto-Detection Setup',
     'To enable automatic payment detection:\n\n' +
-      '1. Install the SMS library:\n' +
-      '   npm install react-native-android-sms-listener\n\n' +
-      '2. Rebuild the app with EAS:\n' +
-      '   eas build -p android --profile preview\n\n' +
-      '3. Grant SMS permissions when prompted\n\n' +
+      '1. Rebuild the app with EAS (native SMS module required)\n' +
+      '2. Grant SMS permissions when prompted\n\n' +
       'Note: This feature only works on Android.',
     [
       { text: 'OK', style: 'default' },
       {
         text: 'Learn More',
-        onPress: () => Linking.openURL('https://github.com/andreyvital/react-native-android-sms-listener'),
+        onPress: () => Linking.openURL('https://github.com/MULERx/expo-sms-listener'),
       },
     ]
   );

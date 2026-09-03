@@ -67,6 +67,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     '@react-native-community/datetimepicker',
+    'expo-sms-listener',
     ['react-native-android-widget', widgetConfig],
   ],
   experiments: {
