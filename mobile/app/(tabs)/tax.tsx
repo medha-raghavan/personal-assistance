@@ -18,6 +18,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { taxService, investmentService } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
 import { PillTabs, PageHeader } from '../../components/ui';
+import { FinancesAppBar, FinancesSubNav } from '../../components/FinancesSubNav';
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-IN', {
@@ -158,7 +159,9 @@ export default function TaxScreen() {
 
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
-      <View className="px-4 pt-4">
+      <FinancesAppBar subtitle="Tax" />
+      <FinancesSubNav active="tax" />
+      <View className="px-4 pt-2">
         <PageHeader title="Tax" subtitle="Salary slips, investments, and regime comparison" />
       </View>
       {/* FY Selector */}

@@ -29,6 +29,7 @@ import {
 } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
 import { TransactionCalendarView } from '../../components/transactions/TransactionCalendarView';
+import { FinancesAppBar, FinancesSubNav } from '../../components/FinancesSubNav';
 import { useAuthStore } from '../../store/authStore';
 
 function toLocalDateString(date: Date): string {
@@ -401,11 +402,12 @@ export default function TransactionsScreen() {
 
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
-      <View className="px-4 pt-4 pb-2">
+      <FinancesAppBar subtitle="Transactions" />
+      <FinancesSubNav active="transactions" />
+      <View className="px-4 pt-2 pb-2">
         <View className="flex-row items-end justify-between gap-3 mb-3">
           <View className="flex-1">
-            <Text style={{ color: colors.text }} className="text-xl font-bold">Transactions</Text>
-            <Text style={{ color: colors.textSecondary }} className="text-sm mt-1">
+            <Text style={{ color: colors.textSecondary }} className="text-sm">
               {(pagination.totalCount ?? pagination.total ?? 0)} transaction{(pagination.totalCount ?? pagination.total ?? 0) === 1 ? '' : 's'} found
             </Text>
           </View>

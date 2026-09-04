@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { sectionService } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
 import { PageHeader } from '../../components/ui';
+import { FinancesAppBar, FinancesSubNav } from '../../components/FinancesSubNav';
 
 const PARSER_TYPES = [
   { value: 'manual', label: 'Manual Entry Only' },
@@ -245,6 +246,8 @@ export default function SectionsScreen() {
 
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
+      <FinancesAppBar subtitle="Accounts" />
+      <FinancesSubNav active="sections" />
       <FlatList
         data={sections}
         keyExtractor={(item) => item._id}

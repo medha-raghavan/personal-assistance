@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { tripService, Trip } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
 import { PageHeader } from '../../components/ui';
+import { FinancesAppBar, FinancesSubNav } from '../../components/FinancesSubNav';
 
 function formatDate(dateString?: string): string {
   if (!dateString) return '';
@@ -194,11 +195,13 @@ export default function TripsScreen() {
 
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
+      <FinancesAppBar subtitle="Trips" />
+      <FinancesSubNav active="trips" />
       <FlatList
         data={trips}
         keyExtractor={(item) => item._id}
         renderItem={renderTrip}
-        contentContainerStyle={{ padding: 16 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         ListHeaderComponent={
           <PageHeader title="Trips & Splits" subtitle="Shared expenses and settlements" />
         }

@@ -1,28 +1,19 @@
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { TouchableOpacity } from 'react-native';
 import { useTheme } from '../../components/ThemeProvider';
 
+const ACCENT = '#7C8CF0';
+
 export default function TabLayout() {
-  const { colors } = useTheme();
-  const router = useRouter();
-  
-  const BackButton = () => (
-    <TouchableOpacity 
-      onPress={() => router.back()} 
-      className="ml-4"
-    >
-      <Ionicons name="arrow-back" size={24} color={colors.text} />
-    </TouchableOpacity>
-  );
-  
+  const { colors, isDark } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
+        tabBarActiveTintColor: ACCENT,
+        tabBarInactiveTintColor: isDark ? '#5B6273' : colors.textMuted,
         tabBarStyle: {
-          backgroundColor: colors.card,
+          backgroundColor: isDark ? 'rgba(18,21,28,0.96)' : colors.card,
           borderTopWidth: 1,
           borderTopColor: colors.border,
           paddingBottom: 5,
@@ -31,7 +22,7 @@ export default function TabLayout() {
         },
         tabBarLabelStyle: {
           fontSize: 11,
-          fontWeight: '500',
+          fontWeight: '600',
         },
         headerStyle: {
           backgroundColor: colors.card,
@@ -47,18 +38,28 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Dashboard',
+          headerShown: false,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
+        name="finances"
+        options={{
+          title: 'Finances',
+          headerShown: false,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="wallet-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="transactions"
         options={{
+          href: null,
           title: 'Transactions',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="swap-horizontal-outline" size={size} color={color} />
-          ),
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -72,8 +73,7 @@ export default function TabLayout() {
         options={{
           href: null,
           title: 'Accounts',
-          headerShown: true,
-          headerLeft: () => <BackButton />,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -81,17 +81,23 @@ export default function TabLayout() {
         options={{
           href: null,
           title: 'Categories',
-          headerShown: true,
-          headerLeft: () => <BackButton />,
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="trips"
         options={{
+          href: null,
           title: 'Trips',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="airplane-outline" size={size} color={color} />
-          ),
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
+        name="tax"
+        options={{
+          href: null,
+          title: 'Tax',
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -100,15 +106,6 @@ export default function TabLayout() {
           title: 'WhatsApp',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="logo-whatsapp" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="tax"
-        options={{
-          title: 'Tax',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calculator-outline" size={size} color={color} />
           ),
         }}
       />

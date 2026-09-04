@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { categoryService } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
 import { PageHeader } from '../../components/ui';
+import { FinancesAppBar, FinancesSubNav } from '../../components/FinancesSubNav';
 
 const COLOR_OPTIONS = [
   '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#8b5cf6',
@@ -267,7 +268,9 @@ export default function CategoriesScreen() {
 
   return (
     <View style={{ backgroundColor: colors.background }} className="flex-1">
-      <View className="px-4 pt-4">
+      <FinancesAppBar subtitle="Categories" />
+      <FinancesSubNav active="categories" />
+      <View className="px-4 pt-2">
         <PageHeader
           title="Categories"
           subtitle="Keywords and colors for auto-tagging"

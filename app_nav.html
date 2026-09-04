@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>App — Mobile Navigation</title>
+<style>
+  :root{
+    --bg:#0B0D12; --panel:#12151C; --panel-2:#171B24; --border:#242938;
+    --text:#E7E9EE; --text-dim:#8B93A3; --text-faint:#5B6273;
+    --income:#2DD4A7; --income-dim:#173C33;
+    --expense:#F0654A; --expense-dim:#3D2018;
+    --savings:#E8A33D; --savings-dim:#3B2C10;
+    --accent:#7C8CF0; --accent-dim:#20233F;
+    --font-sans:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+    --font-hand:'Kalam',cursive;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Kalam:wght@400;700&display=swap');
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{background:var(--bg);}
+  body{color:var(--text); font-family:var(--font-sans); -webkit-font-smoothing:antialiased; max-width:430px; margin:0 auto; min-height:100vh; position:relative;}
+
+  /* app bar */
+  .appbar{padding:16px 16px 12px 16px; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; background:var(--bg); z-index:15;}
+  .appbar-title{font-size:19px; font-weight:800; letter-spacing:-0.01em;}
+  .appbar-sub{font-size:11.5px; color:var(--text-faint); margin-top:2px;}
+  .sync-pill{font-size:10.5px; color:var(--text-dim); background:var(--panel-2); border:1px solid var(--border); padding:5px 10px; border-radius:100px; display:flex; align-items:center; gap:5px;}
+
+  /* finances sub-nav */
+  .subnav{display:flex; gap:8px; overflow-x:auto; padding:0 16px 12px 16px; position:sticky; top:60px; background:var(--bg); z-index:14;}
+  .subnav-item{flex-shrink:0; font-size:12.5px; font-weight:600; color:var(--text-dim); background:var(--panel); border:1px solid var(--border); padding:8px 14px; border-radius:100px; white-space:nowrap;}
+  .subnav-item.active{background:var(--accent-dim); border-color:var(--accent); color:var(--accent);}
+
+  .view{display:none; padding:0 14px 100px 14px;}
+  .view.active{display:block;}
+
+  /* ---------- planner (This Week) theme — light, notebook style ---------- */
+  .planner{background:var(--bg); padding-bottom:16px;}
+  .plan-card{
+    background:#F4EFE3; border-radius:14px; padding:16px; margin-bottom:14px; position:relative; overflow:hidden;
+    box-shadow:0 6px 18px rgba(0,0,0,0.25);
+  }
+  .plan-card.pink{background:#F6D9D3;} .plan-card.blue{background:#DCE3EC;}
+  .plan-card.yellow{background:#F3E4B8;} .plan-card.green{background:#DCE8D6;}
+  .plan-card.tan{background:#F0D9B8;} .plan-card.gray{background:#DEE2E6;} .plan-card.purple{background:#E3DCEF;}
+  .tape{position:absolute; top:-6px; left:50%; transform:translateX(-50%) rotate(-3deg); width:52px; height:16px; border-radius:2px; opacity:0.75;}
+  .plan-head{display:flex; justify-content:space-between; align-items:center; cursor:pointer;}
+  .plan-head-left{display:flex; align-items:center; gap:8px;}
+  .plan-title{font-family:var(--font-hand); font-size:18px; font-weight:700; color:#2B2620;}
+  .plan-chevron{font-size:12px; color:#6B6355; transition:transform 0.15s ease;}
+  .plan-card.open .plan-chevron{transform:rotate(180deg);}
+  .plan-body{max-height:0; overflow:hidden; transition:max-height 0.2s ease;}
+  .plan-card.open .plan-body{max-height:600px; margin-top:10px;}
+  .plan-note{font-size:10px; letter-spacing:0.04em; color:#8A8071; text-transform:uppercase; margin-bottom:6px;}
+  .day-row{padding:6px 0; border-bottom:1px dashed rgba(0,0,0,0.1); font-size:12.5px; color:#3A342A;}
+  .day-row:last-child{border-bottom:none;}
+  .day-row b{font-family:var(--font-hand); font-size:14px;}
+  .day-empty{color:#A39A89; font-size:12px; padding:2px 0 6px 0;}
+  .plan-list-row{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:6px 0; font-size:12.5px; color:#2B2620;}
+  .plan-list-row .dot{width:14px; height:14px; border-radius:50%; border:1.5px solid #8A8071; flex-shrink:0; margin-top:1px;}
+  .plan-list-row .badge{font-size:10px; color:#8A8071; white-space:nowrap; flex-shrink:0;}
+  .plan-soon{font-size:12.5px; color:#5C5647; font-style:italic;}
+  .plan-input-row{display:flex; gap:8px; margin-top:4px;}
+  .plan-input-row input{flex:1; border:1px solid rgba(0,0,0,0.15); border-radius:8px; padding:9px 11px; font-size:12.5px; background:rgba(255,255,255,0.5); font-family:var(--font-sans);}
+  .plan-input-row button{border:none; background:rgba(0,0,0,0.65); color:#fff; padding:9px 14px; border-radius:8px; font-size:12px; font-weight:600;}
+
+  /* ---------- finances theme — reuse dark tokens ---------- */
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:12px;}
+  .card-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
+  .card-title{font-size:14px; font-weight:700;}
+  .card-note{font-size:11px; color:var(--text-faint);}
+  .bal-value{font-family:var(--font-mono); font-size:28px; font-weight:700;}
+  .stat-row{display:grid; grid-template-columns:1fr 1fr 1fr; gap:9px; margin-bottom:12px;}
+  .stat-card{background:var(--panel); border:1px solid var(--border); border-radius:13px; padding:12px 11px;}
+  .stat-label{font-size:11px; color:var(--text-dim); margin-bottom:6px;}
+  .stat-value{font-family:var(--font-mono); font-size:15.5px; font-weight:700;}
+  .stat-value.income{color:var(--income);} .stat-value.expense{color:var(--expense);} .stat-value.savings{color:var(--savings);}
+  .row-list{display:flex; flex-direction:column;}
+  .row-item{display:flex; align-items:center; gap:11px; padding:11px 0; border-bottom:1px solid var(--border);}
+  .row-item:last-child{border-bottom:none; padding-bottom:0;}
+  .row-icon{width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0;}
+  .row-mid{flex:1; min-width:0;}
+  .row-title{font-size:13px; font-weight:600;}
+  .row-sub{font-size:11px; color:var(--text-faint); margin-top:2px;}
+  .row-right{text-align:right; flex-shrink:0;}
+  .row-amt{font-family:var(--font-mono); font-size:13px; font-weight:700;}
+  .row-amt.in{color:var(--income);} .row-amt.out{color:var(--expense);}
+  .cat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .cat-tile{background:var(--panel-2); border:1px solid var(--border); border-radius:12px; padding:12px;}
+  .cat-tile-icon{width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; margin-bottom:8px;}
+  .cat-tile-name{font-size:12.5px; font-weight:600;}
+  .cat-tile-count{font-size:10.5px; color:var(--text-faint); margin-top:2px;}
+  .empty-block{text-align:center; padding:40px 20px; color:var(--text-faint); font-size:12.5px;}
+
+  /* ---------- whatsapp view ---------- */
+  .wa-wrap{padding-top:6px;}
+  .wa-bubble{background:var(--panel); border:1px solid var(--border); border-radius:14px 14px 14px 4px; padding:11px 14px; font-size:12.5px; color:var(--text-dim); max-width:80%; margin-bottom:10px;}
+  .wa-bubble.me{background:var(--accent-dim); border-color:var(--accent); color:var(--text); border-radius:14px 14px 4px 14px; margin-left:auto;}
+  .wa-time{font-size:9.5px; color:var(--text-faint); margin-top:5px;}
+  .wa-input-bar{position:fixed; bottom:70px; left:50%; transform:translateX(-50%); width:100%; max-width:430px; padding:0 14px; display:flex; gap:8px;}
+  .wa-input-bar input{flex:1; background:var(--panel); border:1px solid var(--border); border-radius:100px; padding:11px 16px; font-size:13px; color:var(--text); font-family:var(--font-sans);}
+  .wa-input-bar button{width:40px; height:40px; border-radius:50%; background:var(--income); border:none; color:#08201A; font-size:16px;}
+
+  /* bottom nav */
+  .bottomnav{
+    position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:430px;
+    background:rgba(18,21,28,0.96); backdrop-filter:blur(10px); border-top:1px solid var(--border);
+    display:flex; justify-content:space-around; padding:9px 4px 12px 4px; z-index:20;
+  }
+  .nav-item{display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--text-faint); font-size:10.5px; font-weight:600; flex:1; background:none; border:none; font-family:var(--font-sans);}
+  .nav-item .ic{font-size:19px;}
+  .nav-item.active{color:var(--accent);}
+</style>
+</head>
+<body>
+
+  <!-- ================= DASHBOARD (This Week planner) ================= -->
+  <div class="view active" id="view-dashboard">
+    <div class="appbar">
+      <div>
+        <div class="appbar-title" style="font-family:var(--font-hand); font-size:24px;">This Week</div>
+        <div class="appbar-sub">AUG 31 – SEP 6</div>
+      </div>
+      <div class="sync-pill">⟳ TickTick</div>
+    </div>
+
+    <div class="view active" style="display:block; padding:0 14px 100px 14px;">
+      <div class="planner">
+
+        <div class="plan-card" id="pc-cal">
+          <div class="tape" style="background:#8B8378;"></div>
+          <div class="plan-head" onclick="toggle('pc-cal')"><div class="plan-head-left">📅 <span class="plan-title">Calendar</span></div><span class="plan-chevron">▾</span></div>
+          <div class="plan-body">
+            <div class="day-row"><b>FRI 4</b><div>· Overnight Training 2024</div></div>
+            <div class="day-row"><b>SUN 6</b>
+              <div>· 07:30 – Starts Study Class</div>
+              <div>· 05:30 – Okiyome Zone Study class</div>
+              <div>· 04:30 – Gesshisai</div>
+            </div>
+            <div class="day-empty">Mon, Tue, Wed, Thu, Sat — nothing scheduled</div>
+          </div>
+        </div>
+
+        <div class="plan-card pink" id="pc-first">
+          <div class="tape" style="background:#C96B57;"></div>
+          <div class="plan-head" onclick="toggle('pc-first')"><div class="plan-head-left">⚠ <span class="plan-title">Do First</span></div><span class="plan-chevron">▾</span></div>
+          <div class="plan-body">
+            <div class="plan-note">Urgent & important</div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Create a financial report</div><span class="badge">6d pending</span></div>
+          </div>
+        </div>
+
+        <div class="plan-card blue" id="pc-sched">
+          <div class="tape" style="background:#6E7F94;"></div>
+          <div class="plan-head" onclick="toggle('pc-sched')"><div class="plan-head-left">🕐 <span class="plan-title">Schedule</span></div><span class="plan-chevron">▾</span></div>
+          <div class="plan-body">
+            <div class="plan-note">This week · not urgent & important</div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Overnight Training 2024</div><span class="badge">Fri</span></div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Gesshisai</div><span class="badge">Sun</span></div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Okiyome Zone Study class</div><span class="badge">Sun</span></div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Starts Study Class</div><span class="badge">Sun</span></div>
+          </div>
+        </div>
+
+        <div class="plan-card yellow" id="pc-pending">
+          <div class="tape" style="background:#C79A3E;"></div>
+          <div class="plan-head" onclick="toggle('pc-pending')"><div class="plan-head-left">☰ <span class="plan-title">Pending Tasks</span></div><span class="plan-chevron">▾</span></div>
+          <div class="plan-body">
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Meet investor Shopee to make investment plans</div><span class="badge">229d</span></div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Stitch Omitama pockets</div><span class="badge">157d</span></div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Order gift for Aarsh, file IT returns</div><span class="badge">42d</span></div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Update Mumbai trip</div><span class="badge">6d</span></div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Create a financial report</div><span class="badge">6d</span></div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Finish first upload &amp; view expenses</div><span class="badge">6d</span></div>
+          </div>
+        </div>
+
+        <div class="plan-card green" id="pc-meal">
+          <div class="tape" style="background:#6E8F5F;"></div>
+          <div class="plan-head" onclick="toggle('pc-meal')"><div class="plan-head-left">🍴 <span class="plan-title">Meal Plan</span></div><span class="plan-chevron">▾</span></div>
+          <div class="plan-body"><div class="plan-soon">Coming soon</div></div>
+        </div>
+
+        <div class="plan-card tan" id="pc-next">
+          <div class="tape" style="background:#C67A3E;"></div>
+          <div class="plan-head" onclick="toggle('pc-next')"><div class="plan-head-left">🗓 <span class="plan-title">Next Week</span></div><span class="plan-chevron">▾</span></div>
+          <div class="plan-body">
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Convert the recording into a note</div></div>
+            <div class="plan-list-row"><div style="display:flex; gap:8px;"><span class="dot"></span>Monthly Thanksgiving Ceremony</div></div>
+          </div>
+        </div>
+
+        <div class="plan-card gray" id="pc-notes">
+          <div class="tape" style="background:#6E7F94;"></div>
+          <div class="plan-head" onclick="toggle('pc-notes')"><div class="plan-head-left">📝 <span class="plan-title">Notes</span></div><span class="plan-chevron">▾</span></div>
+          <div class="plan-body">
+            <div class="plan-input-row"><input placeholder="Add a note…"><button>Add</button></div>
+            <div style="margin-top:8px; font-size:12px; color:#3A342A;">– blah</div>
+          </div>
+        </div>
+
+        <div class="plan-card purple" id="pc-goals">
+          <div class="tape" style="background:#8A78A8;"></div>
+          <div class="plan-head" onclick="toggle('pc-goals')"><div class="plan-head-left">🎯 <span class="plan-title">Yearly Goals</span></div><span class="plan-chevron">▾</span></div>
+          <div class="plan-body"><div class="plan-soon">Coming soon</div></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= FINANCES ================= -->
+  <div class="view" id="view-finances">
+    <div class="appbar">
+      <div>
+        <div class="appbar-title">Finances</div>
+        <div class="appbar-sub" id="fin-sub">Overview</div>
+      </div>
+    </div>
+    <div class="subnav" id="fin-subnav">
+      <span class="subnav-item active" data-sub="fdash">Dashboard</span>
+      <span class="subnav-item" data-sub="ftx">Transactions</span>
+      <span class="subnav-item" data-sub="fsec">Sections</span>
+      <span class="subnav-item" data-sub="fcat">Categories</span>
+      <span class="subnav-item" data-sub="ftrip">Trips</span>
+      <span class="subnav-item" data-sub="ftax">Tax</span>
+    </div>
+
+    <div style="padding:0 14px 100px 14px;">
+
+      <div class="fin-sub-view" id="fdash">
+        <div class="card">
+          <div class="card-note" style="margin-bottom:4px;">Balance</div>
+          <div class="bal-value">₹8,39,785</div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-card"><div class="stat-label">Income</div><div class="stat-value income">₹4,21,001</div></div>
+          <div class="stat-card"><div class="stat-label">Expenses</div><div class="stat-value expense">₹2,73,458</div></div>
+          <div class="stat-card"><div class="stat-label">Net</div><div class="stat-value savings">+₹1,47,543</div></div>
+        </div>
+        <div class="card-note" style="text-align:center; padding-top:4px;">Full dashboard — day-of-week trend, category split, monthly trend, per-account breakdown — lives here (see previous screen).</div>
+      </div>
+
+      <div class="fin-sub-view" id="ftx" style="display:none;">
+        <div class="card"><div class="card-head"><div class="card-title">Recent transactions</div><div class="card-note">159 this month</div></div>
+          <div class="row-list" id="tx-rows"></div>
+        </div>
+      </div>
+
+      <div class="fin-sub-view" id="fsec" style="display:none;">
+        <div class="card"><div class="card-head"><div class="card-title">Sections</div><div class="card-note">3 accounts</div></div>
+          <div class="row-list" id="sec-rows"></div>
+        </div>
+      </div>
+
+      <div class="fin-sub-view" id="fcat" style="display:none;">
+        <div class="card"><div class="card-head"><div class="card-title">Categories</div><div class="card-note">10 total</div></div>
+          <div class="cat-grid" id="cat-grid"></div>
+        </div>
+      </div>
+
+      <div class="fin-sub-view" id="ftrip" style="display:none;">
+        <div class="card"><div class="card-head"><div class="card-title">Trips</div><div class="card-note">2 active</div></div>
+          <div class="row-list" id="trip-rows"></div>
+        </div>
+      </div>
+
+      <div class="fin-sub-view" id="ftax" style="display:none;">
+        <div class="card">
+          <div class="card-head"><div class="card-title">FY 2025–26</div><div class="card-note">Apr – Mar</div></div>
+          <div class="row-list">
+            <div class="row-item"><div class="row-icon" style="background:#7C8CF022;">🧮</div><div class="row-mid"><div class="row-title">Taxable income (est.)</div><div class="row-sub">Based on tagged income entries</div></div><div class="row-right"><div class="row-amt">₹18,40,000</div></div></div>
+            <div class="row-item"><div class="row-icon" style="background:#2DD4A722;">📎</div><div class="row-mid"><div class="row-title">Deductible expenses</div><div class="row-sub">80C, 80D tagged transactions</div></div><div class="row-right"><div class="row-amt in">₹2,10,000</div></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= WHATSAPP ================= -->
+  <div class="view" id="view-whatsapp">
+    <div class="appbar"><div><div class="appbar-title">WhatsApp</div><div class="appbar-sub">Add expenses by chat</div></div></div>
+    <div class="wa-wrap" style="padding:0 14px 100px 14px;">
+      <div class="wa-bubble">Send me a message like "450 lunch at Zomato" and I'll log it under Food &amp; Dining.<div class="wa-time">9:02 AM</div></div>
+      <div class="wa-bubble me">540 zomato dinner<div class="wa-time">9:14 AM</div></div>
+      <div class="wa-bubble">Logged ₹540 → Food &amp; Dining, HDFC Bank ✅<div class="wa-time">9:14 AM</div></div>
+    </div>
+    <div class="wa-input-bar"><input placeholder="Type a transaction…"><button>➤</button></div>
+  </div>
+
+  <div class="bottomnav">
+    <button class="nav-item active" data-view="dashboard"><span class="ic">🏠</span>Dashboard</button>
+    <button class="nav-item" data-view="finances"><span class="ic">💰</span>Finances</button>
+    <button class="nav-item" data-view="whatsapp"><span class="ic">💬</span>WhatsApp</button>
+  </div>
+
+<script>
+/* ---------- main tab switching ---------- */
+document.querySelectorAll('.nav-item').forEach(btn=>{
+  btn.onclick = ()=>{
+    document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+  };
+});
+
+/* ---------- planner card accordion ---------- */
+function toggle(id){ document.getElementById(id).classList.toggle('open'); }
+// open the two most relevant cards by default
+toggle('pc-first'); toggle('pc-pending');
+
+/* ---------- finances sub-nav switching ---------- */
+const subLabels = {fdash:'Overview', ftx:'Transactions', fsec:'Sections', fcat:'Categories', ftrip:'Trips', ftax:'Tax'};
+document.querySelectorAll('#fin-subnav .subnav-item').forEach(item=>{
+  item.onclick = ()=>{
+    document.querySelectorAll('#fin-subnav .subnav-item').forEach(i=>i.classList.remove('active'));
+    item.classList.add('active');
+    document.querySelectorAll('.fin-sub-view').forEach(v=>v.style.display='none');
+    document.getElementById(item.dataset.sub).style.display='';
+    document.getElementById('fin-sub').textContent = subLabels[item.dataset.sub];
+  };
+});
+
+/* ---------- mock content ---------- */
+const inr = n => '₹'+n.toLocaleString('en-IN');
+document.getElementById('tx-rows').innerHTML = [
+  ['🍽','Zomato dinner','Food & Dining · HDFC Bank','02 Sep',540,'out'],
+  ['💼','Salary credit','Income · ICICI Bank','01 Sep',180000,'in'],
+  ['✈','Flight booking','Travel · HDFC Credit Card','28 Aug',22400,'out'],
+  ['📈','Mutual fund SIP','Investment · ICICI Bank','25 Aug',45000,'out'],
+].map(([ic,t,s,d,a,dir])=>`
+  <div class="row-item"><div class="row-icon" style="background:${dir==='in'?'#2DD4A722':'#F0654A22'};">${ic}</div>
+  <div class="row-mid"><div class="row-title">${t}</div><div class="row-sub">${s} · ${d}</div></div>
+  <div class="row-right"><div class="row-amt ${dir}">${dir==='in'?'+':'-'}${inr(a)}</div></div></div>`).join('');
+
+document.getElementById('sec-rows').innerHTML = [
+  ['🏦','HDFC Bank','Savings',261681],
+  ['🏦','ICICI Bank','Savings',626471],
+  ['💳','HDFC Bank Credit Card','Credit card',48367],
+].map(([ic,t,s,a])=>`
+  <div class="row-item"><div class="row-icon" style="background:#7C8CF022;">${ic}</div>
+  <div class="row-mid"><div class="row-title">${t}</div><div class="row-sub">${s}</div></div>
+  <div class="row-right"><div class="row-amt">${inr(a)}</div></div></div>`).join('');
+
+document.getElementById('cat-grid').innerHTML = [
+  ['👪','Family',4,'#E06B9A22'],['📈','Investment',6,'#2DD4A722'],
+  ['💡','Bills & Utilities',13,'#7C8CF022'],['✈','Travel',8,'#4FA6E822'],
+  ['↔','Transfer',5,'#8B93A322'],['🚕','Transport',7,'#6C8CE022'],
+  ['🍽','Food & Dining',23,'#E8A33D22'],['🛍','Shopping',9,'#C77DE022'],
+].map(([ic,name,n,bg])=>`
+  <div class="cat-tile"><div class="cat-tile-icon" style="background:${bg};">${ic}</div>
+  <div class="cat-tile-name">${name}</div><div class="cat-tile-count">${n} keywords</div></div>`).join('');
+
+document.getElementById('trip-rows').innerHTML = [
+  ['✈','Goa Trip','12 – 16 Jul 2026',34200],
+  ['✈','Mumbai Trip','Planned · Sept 2026',0],
+].map(([ic,t,s,a])=>`
+  <div class="row-item"><div class="row-icon" style="background:#4FA6E822;">${ic}</div>
+  <div class="row-mid"><div class="row-title">${t}</div><div class="row-sub">${s}</div></div>
+  <div class="row-right"><div class="row-amt">${a?inr(a):'—'}</div></div></div>`).join('');
+</script>
+</body>
+</html>

@@ -114,6 +114,12 @@ export default function SettingsScreen() {
 
   const settingsItems = [
     {
+      icon: 'stats-chart-outline',
+      title: 'Finances Dashboard',
+      subtitle: 'Balances, trends, and spending overview',
+      onPress: () => router.push('/(tabs)/finances'),
+    },
+    {
       icon: 'wallet-outline',
       title: 'Accounts',
       subtitle: 'Manage your bank accounts and wallets',

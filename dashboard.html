@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Financial Dashboard</title>
+<style>
+  :root{
+    --bg:#0B0D12; --panel:#12151C; --panel-2:#171B24; --border:#242938;
+    --text:#E7E9EE; --text-dim:#8B93A3; --text-faint:#5B6273;
+    --income:#2DD4A7; --income-dim:#173C33;
+    --expense:#F0654A; --expense-dim:#3D2018;
+    --savings:#E8A33D; --savings-dim:#3B2C10;
+    --accent:#7C8CF0; --accent-dim:#20233F;
+    --font-sans:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:var(--font-sans); padding:20px; -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1340px; margin:0 auto;}
+  .top{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:16px; gap:10px; flex-wrap:wrap;}
+  .top h1{font-size:19px; font-weight:700; letter-spacing:-0.01em;}
+  .top .sub{color:var(--text-dim); font-size:12.5px; margin-top:4px;}
+
+  /* filter bar */
+  .filterbar{background:var(--panel); border:1px solid var(--border); border-radius:12px; margin-bottom:16px; overflow:hidden;}
+  .filter-head{display:flex; align-items:center; justify-content:space-between; padding:12px 14px; cursor:pointer; gap:10px;}
+  .filter-head-left{display:flex; align-items:center; gap:8px; flex:1; min-width:0;}
+  .filter-title{font-size:13px; font-weight:600; flex-shrink:0;}
+  .filter-summary{display:flex; gap:6px; flex-wrap:wrap; overflow:hidden;}
+  .fs-pill{font-size:11px; padding:3px 9px; border-radius:100px; background:var(--panel-2); border:1px solid var(--border); color:var(--text-dim); white-space:nowrap;}
+  .chevron{font-size:11px; color:var(--text-faint); transition:transform 0.15s ease; flex-shrink:0;}
+  .filterbar.open .chevron{transform:rotate(180deg);}
+  .filter-body{max-height:0; overflow:hidden; transition:max-height 0.2s ease;}
+  .filterbar.open .filter-body{max-height:400px;}
+  .filter-body-inner{padding:4px 14px 14px 14px; display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; border-top:1px solid var(--border);}
+  .fgroup{display:flex; flex-direction:column; gap:4px;}
+  .fgroup label{font-size:10.5px; color:var(--text-faint); font-weight:600;}
+  select{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-family:var(--font-sans); font-size:12.5px; padding:7px 10px; border-radius:7px; min-width:120px;}
+  input[type=date]{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-family:var(--font-mono); font-size:12px; padding:6px 9px; border-radius:7px; color-scheme:dark;}
+  .date-range{display:none; align-items:flex-end; gap:8px;}
+  .date-range.show{display:flex;}
+  .date-range .fgroup label{white-space:nowrap;}
+  .date-sep{color:var(--text-faint); font-size:12px; padding-bottom:8px;}
+  .seg{display:flex; background:var(--panel-2); border:1px solid var(--border); border-radius:7px; overflow:hidden;}
+  .seg span{padding:7px 12px; font-size:12px; color:var(--text-dim); cursor:pointer;}
+  .seg span.active{background:var(--accent-dim); color:var(--accent); font-weight:600;}
+  .reset-btn{margin-left:auto; font-size:11.5px; color:var(--text-dim); background:none; border:1px solid var(--border); padding:7px 12px; border-radius:7px; cursor:pointer; font-family:var(--font-sans); height:32px;}
+  .reset-btn:hover{color:var(--text); border-color:var(--text-faint);}
+
+  /* category multiselect dropdown */
+  .msel{position:relative;}
+  .msel-btn{background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-family:var(--font-sans); font-size:12.5px; padding:7px 10px; border-radius:7px; min-width:150px; text-align:left; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:8px;}
+  .msel-btn .arrow{font-size:9px; color:var(--text-faint);}
+  .msel-panel{
+    position:absolute; top:calc(100% + 6px); left:0; z-index:50; min-width:220px; max-height:260px; overflow-y:auto;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:9px; padding:6px; display:none;
+    box-shadow:0 10px 30px rgba(0,0,0,0.4);
+  }
+  .msel-panel.open{display:block;}
+  .msel-opt{display:flex; align-items:center; gap:8px; padding:7px 8px; font-size:12.5px; border-radius:6px; cursor:pointer; color:var(--text-dim);}
+  .msel-opt:hover{background:var(--panel);}
+  .msel-opt input{accent-color:var(--accent);}
+  .msel-opt.checked{color:var(--text);}
+  .msel-clear{font-size:11px; color:var(--accent); text-align:right; padding:4px 8px; cursor:pointer;}
+
+  /* hero */
+  .hero{display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; gap:12px; margin-bottom:12px;}
+  .hero-card{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; min-width:0;}
+  .hero-card.balance{background:linear-gradient(180deg, var(--panel-2), var(--panel));}
+  .hero-label{font-size:11.5px; color:var(--text-dim); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;}
+  .hero-value{font-family:var(--font-mono); font-size:25px; font-weight:600; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .hero-value.income{color:var(--income);} .hero-value.expense{color:var(--expense);} .hero-value.savings{color:var(--savings);}
+  .hero-foot{font-size:11.5px; color:var(--text-faint); margin-top:8px;}
+  .accounts-row{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+  .acc-chip{font-family:var(--font-mono); font-size:11px; background:var(--panel-2); border:1px solid var(--border); border-radius:6px; padding:4px 9px; color:var(--text-dim);}
+  .acc-chip b{color:var(--text); font-weight:600;}
+
+  .grid{display:grid; grid-template-columns:1.55fr 1fr; gap:12px; margin-bottom:12px;}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px 18px; min-width:0;}
+  .card-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:8px; flex-wrap:wrap;}
+  .card-title{font-size:13px; font-weight:600;}
+  .card-note{font-size:11px; color:var(--text-faint);}
+  .empty-note{color:var(--text-faint); font-size:12.5px; padding:30px 0; text-align:center;}
+
+  .legend-row{display:flex; gap:16px; font-size:11px; color:var(--text-dim);}
+  .legend-dot{width:8px; height:8px; border-radius:2px; display:inline-block; margin-right:5px; vertical-align:middle;}
+
+  .dow-wrap{display:flex; align-items:flex-end; gap:10px; height:150px; padding-top:8px;}
+  .dow-col{flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:6px;}
+  .dow-bar{width:100%; max-width:34px; border-radius:5px 5px 0 0; background:var(--expense); min-height:3px;}
+  .dow-bar.weekend{background:var(--savings);}
+  .dow-label{font-size:11px; color:var(--text-faint); font-family:var(--font-mono);}
+  .dow-amt{font-size:9.5px; color:var(--text-dim); font-family:var(--font-mono); white-space:nowrap;}
+  .dow-insight{margin-top:12px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-dim); line-height:1.5;}
+  .dow-insight b{color:var(--text); font-weight:600;}
+
+  .cat-list{display:flex; flex-direction:column; gap:11px;}
+  .cat-row{display:flex; align-items:center; gap:10px;}
+  .cat-icon{width:24px; height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:11px; flex-shrink:0;}
+  .cat-info{flex:1; min-width:0;}
+  .cat-top{display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; gap:8px;}
+  .cat-top .name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .cat-top .amt{font-family:var(--font-mono); color:var(--text-dim); flex-shrink:0;}
+  .cat-track{height:5px; background:var(--panel-2); border-radius:3px; overflow:hidden;}
+  .cat-fill{height:100%; border-radius:3px;}
+
+  .trend-wrap{height:160px; display:flex; align-items:flex-end; gap:10px; padding-top:10px; overflow-x:auto;}
+  .trend-col{flex:1; min-width:36px; display:flex; flex-direction:column; align-items:center; gap:6px;}
+  .trend-bars{display:flex; gap:4px; align-items:flex-end; height:120px;}
+  .trend-bar{width:14px; border-radius:3px 3px 0 0; min-height:2px;}
+  .trend-bar.in{background:var(--income);} .trend-bar.out{background:var(--expense);}
+  .trend-label{font-size:10.5px; color:var(--text-faint); font-family:var(--font-mono);}
+
+  .acc-breakdown{display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:12px;}
+  .acc-card{background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px; min-width:0;}
+  .acc-card.dimmed{opacity:0.4;}
+  .acc-card-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; gap:6px;}
+  .acc-card-name{font-size:13px; font-weight:700;}
+  .acc-card-bal{font-family:var(--font-mono); font-size:12.5px; color:var(--text-dim);}
+  .acc-stat-row{display:flex; gap:12px; margin-bottom:12px;}
+  .acc-stat{flex:1; min-width:0;}
+  .acc-stat .l{font-size:10.5px; color:var(--text-faint); margin-bottom:2px;}
+  .acc-stat .v{font-family:var(--font-mono); font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .acc-stat .v.in{color:var(--income);} .acc-stat .v.out{color:var(--expense);}
+  .acc-mini-cat{display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-dim); padding:4px 0; border-top:1px solid var(--border); gap:6px;}
+  .acc-mini-cat span:first-child{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .acc-mini-cat span:last-child{font-family:var(--font-mono); color:var(--text); flex-shrink:0;}
+
+  table{width:100%; border-collapse:collapse;}
+  th{text-align:left; font-size:10.5px; color:var(--text-faint); font-weight:500; padding:0 8px 8px 8px; border-bottom:1px solid var(--border); white-space:nowrap;}
+  th.num{text-align:right;}
+  td{padding:9px 8px; font-size:12px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  .tx-desc{font-weight:500;}
+  .tx-tag{font-size:10px; color:var(--text-faint); font-family:var(--font-mono); margin-left:5px;}
+  .tx-cat{display:inline-block; font-size:10px; padding:2px 6px; border-radius:5px; color:var(--text-dim); background:var(--panel-2); border:1px solid var(--border); white-space:nowrap;}
+  .tx-amt{font-family:var(--font-mono); text-align:right; font-weight:600; white-space:nowrap;}
+  .tx-amt.in{color:var(--income);} .tx-amt.out{color:var(--expense);}
+  .tx-date{color:var(--text-faint); font-family:var(--font-mono); font-size:11px; white-space:nowrap;}
+  .tx-acc{color:var(--text-dim); font-size:11px; white-space:nowrap;}
+  .tx-rank{color:var(--text-faint); font-family:var(--font-mono); font-size:11px;}
+  .table-scroll{overflow-x:auto;}
+
+  /* ---------- mobile ---------- */
+  @media (max-width:720px){
+    body{padding:12px;}
+    .top h1{font-size:17px;}
+    .hero{grid-template-columns:1fr 1fr; gap:8px;}
+    .hero-card{padding:12px 14px;}
+    .hero-value{font-size:19px;}
+    .hero-card.balance{grid-column:1 / -1;}
+    .grid{grid-template-columns:1fr;}
+    .acc-breakdown{grid-template-columns:1fr;}
+    .filter-body-inner{flex-direction:column; align-items:stretch;}
+    .fgroup{width:100%;}
+    select, .msel-btn{width:100%; min-width:0;}
+    .reset-btn{margin-left:0; width:100%;}
+    .filter-summary{display:none;}
+    table{min-width:520px;}
+    .trend-col{min-width:30px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div>
+      <h1>Financial dashboard</h1>
+      <div class="sub" id="subline">3 accounts &middot; last updated just now</div>
+    </div>
+  </div>
+
+  <div class="filterbar" id="filterbar">
+    <div class="filter-head" id="filter-head">
+      <div class="filter-head-left">
+        <span class="filter-title">Filters</span>
+        <div class="filter-summary" id="filter-summary"></div>
+      </div>
+      <span class="chevron">▾</span>
+    </div>
+    <div class="filter-body">
+      <div class="filter-body-inner">
+        <div class="fgroup">
+          <label>Account</label>
+          <select id="f-account">
+            <option value="all">All accounts</option>
+            <option value="Kotak">Kotak</option>
+            <option value="HDFC">HDFC</option>
+            <option value="Cash">Cash</option>
+          </select>
+        </div>
+        <div class="fgroup">
+          <label>Period</label>
+          <select id="f-period">
+            <option value="7">Last 7 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">This year</option>
+            <option value="all">All time</option>
+            <option value="custom">Custom range&hellip;</option>
+          </select>
+        </div>
+        <div class="date-range" id="date-range">
+          <div class="fgroup">
+            <label>From</label>
+            <input type="date" id="f-date-from">
+          </div>
+          <span class="date-sep">&rarr;</span>
+          <div class="fgroup">
+            <label>To</label>
+            <input type="date" id="f-date-to">
+          </div>
+        </div>
+        <div class="fgroup">
+          <label>Type</label>
+          <div class="seg" id="f-type">
+            <span class="active" data-v="all">All</span>
+            <span data-v="income">Income</span>
+            <span data-v="expense">Expense</span>
+          </div>
+        </div>
+        <div class="fgroup">
+          <label>Categories</label>
+          <div class="msel" id="cat-msel">
+            <div class="msel-btn" id="cat-msel-btn"><span id="cat-msel-label">All categories</span><span class="arrow">▾</span></div>
+            <div class="msel-panel" id="cat-msel-panel"></div>
+          </div>
+        </div>
+        <button class="reset-btn" id="reset">Reset filters</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-card balance">
+      <div class="hero-label">Balance</div>
+      <div class="hero-value" id="v-balance">₹0</div>
+      <div class="accounts-row" id="accounts-row"></div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-label">Income</div>
+      <div class="hero-value income" id="v-income">₹0</div>
+      <div class="hero-foot" id="f-income-foot"></div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-label">Expenses</div>
+      <div class="hero-value expense" id="v-expense">₹0</div>
+      <div class="hero-foot" id="f-expense-foot"></div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-label">Net savings</div>
+      <div class="hero-value savings" id="v-savings">₹0</div>
+      <div class="hero-foot" id="f-savings-foot"></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Spending by day of week</div>
+        <div class="card-note" id="dow-note"></div>
+      </div>
+      <div class="dow-wrap" id="dow"></div>
+      <div class="dow-insight" id="dow-insight"></div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title" id="cat-card-title">Spending by category</div>
+        <div class="card-note" id="cat-card-note"></div>
+      </div>
+      <div class="cat-list" id="catlist"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-head"><div class="card-title">Monthly trend</div><div class="card-note">last 6 months &middot; selected account</div></div>
+    <div class="trend-wrap" id="trend"></div>
+  </div>
+
+  <div class="card-head" style="margin-bottom:10px;">
+    <div class="card-title" style="font-size:14px;">Spending by account</div>
+    <div class="card-note">reflects period, type and category filters above</div>
+  </div>
+  <div class="acc-breakdown" id="acc-breakdown"></div>
+
+  <div class="card">
+    <div class="card-head"><div class="card-title">Top transactions</div><div class="card-note" id="tx-count"></div></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>Date</th><th>Description</th><th>Category</th><th>Account</th><th class="num">Amount</th></tr></thead>
+        <tbody id="txbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ---------- data model ---------- */
+const ACCOUNTS = ['Kotak','HDFC','Cash'];
+const BALANCES = {Kotak:412300, HDFC:301485, Cash:26000};
+
+const EXP_CATS = [
+  {name:'Food & Dining', color:'#F0654A', icon:'🍽'},
+  {name:'Bills & Utilities', color:'#7C8CF0', icon:'💡'},
+  {name:'Groceries', color:'#2DD4A7', icon:'🛒'},
+  {name:'Entertainment', color:'#E8A33D', icon:'🎬'},
+  {name:'Health', color:'#E06B9A', icon:'💊'},
+  {name:'Education', color:'#4FA6E8', icon:'📚'},
+  {name:'Cash Withdrawal', color:'#8B93A3', icon:'💵'},
+  {name:'Family', color:'#C77DE0', icon:'👪'},
+];
+const INC_CATS = [
+  {name:'Salary', color:'#2DD4A7', icon:'💼'},
+  {name:'Freelance', color:'#4FA6E8', icon:'🧾'},
+  {name:'Other Income', color:'#8B93A3', icon:'➕'},
+];
+const ALL_CATS = [...EXP_CATS, ...INC_CATS];
+const CAT_MAP = Object.fromEntries(ALL_CATS.map(c=>[c.name,c]));
+
+const DESCS = {
+  'Food & Dining':['Zomato order','Swiggy order','Cafe coffee','Restaurant dinner','Chaat stall'],
+  'Bills & Utilities':['Electricity bill','Mobile recharge','Internet bill','Water bill','DTH recharge'],
+  'Groceries':['BigBasket order','Local kirana','Vegetable market','Milk delivery'],
+  'Entertainment':['Netflix subscription','BookMyShow tickets','Spotify premium','PVR movie'],
+  'Health':['Pharmacy','Doctor visit','Health checkup'],
+  'Education':['Udemy course','Book purchase','Tuition fee'],
+  'Cash Withdrawal':['ATM withdrawal'],
+  'Family':['Sent to Sahil','Family expense','Gift for Gopala'],
+  'Salary':['Monthly salary'],
+  'Freelance':['Freelance payment','Client invoice'],
+  'Other Income':['Cashback','Refund','Interest credit'],
+};
+
+let seed = 42;
+function rnd(){ seed = (seed*9301+49297)%233280; return seed/233280; }
+function pick(arr){ return arr[Math.floor(rnd()*arr.length)]; }
+
+const TODAY = new Date('2026-09-02');
+function daysAgo(n){ const d=new Date(TODAY); d.setDate(d.getDate()-n); return d; }
+function fmtDate(d){ return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}); }
+function isoDate(d){ return d.toISOString().slice(0,10); }
+
+let TXNS = [];
+(function generate(){
+  for(let m=0;m<13;m++){
+    const d = daysAgo(m*30+2);
+    TXNS.push({date:d, account:'Kotak', type:'income', category:'Salary', amount:Math.round(48000+rnd()*8000), desc:'Monthly salary', tag:'salary'});
+  }
+  for(let n=0; n<400; n++){
+    const d = daysAgo(n);
+    const numTx = rnd()<0.55 ? 1 : (rnd()<0.7?0:2);
+    for(let i=0;i<numTx;i++){
+      const isIncome = rnd()<0.08;
+      const cats = isIncome ? INC_CATS.filter(c=>c.name!=='Salary') : EXP_CATS;
+      const cat = pick(cats);
+      const amount = isIncome ? Math.round(1000+rnd()*20000) : Math.round(150+rnd()*3500);
+      // occasional larger expense to populate "top transactions"
+      const big = !isIncome && rnd()<0.04;
+      const finalAmount = big ? Math.round(8000+rnd()*40000) : amount;
+      const account = pick(ACCOUNTS);
+      TXNS.push({date:d, account, type:isIncome?'income':'expense', category:cat.name, amount:finalAmount, desc:pick(DESCS[cat.name]), tag:cat.name.toLowerCase().split(' ')[0]});
+    }
+  }
+  TXNS.sort((a,b)=>b.date-a.date);
+})();
+
+/* ---------- filter state ---------- */
+const state = { account:'all', period:'30', type:'all', categories:new Set(), customFrom:null, customTo:null };
+
+function inPeriod(t){
+  if(state.period==='all') return true;
+  if(state.period==='custom'){
+    if(!state.customFrom && !state.customTo) return true; // no range picked yet
+    if(state.customFrom && t.date < state.customFrom) return false;
+    if(state.customTo && t.date > state.customTo) return false;
+    return true;
+  }
+  const cutoff = daysAgo(parseInt(state.period));
+  return t.date >= cutoff;
+}
+function matchesFilters(t, opts={}){
+  const acc = opts.ignoreAccount ? true : (state.account==='all' || t.account===state.account);
+  const per = opts.ignorePeriod ? true : inPeriod(t);
+  const type = opts.ignoreType ? true : (state.type==='all' || t.type===state.type);
+  const cat = state.categories.size===0 || state.categories.has(t.category);
+  return acc && per && type && cat;
+}
+const inr = n => '₹'+Math.round(Math.abs(n)).toLocaleString('en-IN');
+
+function periodLabel(short){
+  if(state.period==='custom'){
+    const from = state.customFrom ? fmtDate(state.customFrom) : '…';
+    const to = state.customTo ? fmtDate(state.customTo) : '…';
+    return `${from} – ${to}`;
+  }
+  const map = short
+    ? {'7':'7d','30':'30d','90':'90d','365':'1y','all':'all time'}
+    : {'7':'last 7 days','30':'last 30 days','90':'last 90 days','365':'this year','all':'all time'};
+  return map[state.period];
+}
+
+/* ---------- filter bar: collapse ---------- */
+document.getElementById('filter-head').onclick = ()=>{
+  document.getElementById('filterbar').classList.toggle('open');
+};
+
+/* ---------- filter bar: category multiselect dropdown ---------- */
+function catOptionsForType(){
+  return state.type==='income' ? INC_CATS : state.type==='expense' ? EXP_CATS : ALL_CATS;
+}
+function renderCategoryDropdown(){
+  const panel = document.getElementById('cat-msel-panel');
+  const list = catOptionsForType();
+  panel.innerHTML = '<div class="msel-clear" id="cat-clear">Clear selection</div>' + list.map(c=>{
+    const checked = state.categories.has(c.name);
+    return `<label class="msel-opt${checked?' checked':''}"><input type="checkbox" data-cat="${c.name}" ${checked?'checked':''}/> ${c.icon} ${c.name}</label>`;
+  }).join('');
+  panel.querySelectorAll('input[type=checkbox]').forEach(inp=>{
+    inp.onchange = ()=>{
+      if(inp.checked) state.categories.add(inp.dataset.cat);
+      else state.categories.delete(inp.dataset.cat);
+      renderCategoryDropdown();
+      updateCatLabel();
+      renderAll();
+    };
+  });
+  document.getElementById('cat-clear').onclick = ()=>{
+    state.categories.clear();
+    renderCategoryDropdown();
+    updateCatLabel();
+    renderAll();
+  };
+}
+function updateCatLabel(){
+  const n = state.categories.size;
+  document.getElementById('cat-msel-label').textContent = n===0 ? 'All categories' : n===1 ? [...state.categories][0] : n+' categories selected';
+}
+document.getElementById('cat-msel-btn').onclick = (e)=>{
+  e.stopPropagation();
+  document.getElementById('cat-msel-panel').classList.toggle('open');
+};
+document.addEventListener('click', (e)=>{
+  if(!document.getElementById('cat-msel').contains(e.target)){
+    document.getElementById('cat-msel-panel').classList.remove('open');
+  }
+});
+
+/* ---------- filter summary pills (shown when collapsed) ---------- */
+function renderFilterSummary(){
+  const wrap = document.getElementById('filter-summary');
+  const pills = [];
+  pills.push(state.account==='all' ? 'All accounts' : state.account);
+  pills.push(periodLabel(true));
+  if(state.type!=='all') pills.push(state.type==='income'?'Income':'Expense');
+  if(state.categories.size) pills.push(state.categories.size+' categories');
+  wrap.innerHTML = pills.map(p=>`<span class="fs-pill">${p}</span>`).join('');
+}
+
+/* ---------- render: hero ---------- */
+function renderHero(){
+  const filtered = TXNS.filter(t=>matchesFilters(t));
+  const income = filtered.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0);
+  const expense = filtered.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amount,0);
+  const net = income-expense;
+
+  const balance = state.account==='all' ? Object.values(BALANCES).reduce((a,b)=>a+b,0) : BALANCES[state.account];
+  document.getElementById('v-balance').textContent = inr(balance);
+  document.getElementById('v-income').textContent = inr(income);
+  document.getElementById('v-expense').textContent = inr(expense);
+  document.getElementById('v-savings').textContent = (net<0?'-':'+')+inr(net);
+  document.getElementById('f-income-foot').textContent = filtered.filter(t=>t.type==='income').length+' transactions';
+  document.getElementById('f-expense-foot').textContent = filtered.filter(t=>t.type==='expense').length+' transactions';
+  document.getElementById('f-savings-foot').textContent = income>0 ? Math.round(net/income*100)+'% savings rate' : '—';
+
+  const row = document.getElementById('accounts-row');
+  row.innerHTML='';
+  ACCOUNTS.forEach(a=>{
+    const chip=document.createElement('span');
+    chip.className='acc-chip';
+    chip.style.opacity = (state.account!=='all' && state.account!==a) ? 0.4 : 1;
+    chip.innerHTML = `${a} <b>${inr(BALANCES[a])}</b>`;
+    row.appendChild(chip);
+  });
+
+  const bits = [state.account==='all'?'3 accounts':state.account, periodLabel(false)];
+  if(state.type!=='all') bits.push(state.type+' only');
+  if(state.categories.size) bits.push(state.categories.size+' categor'+(state.categories.size>1?'ies':'y')+' selected');
+  document.getElementById('subline').textContent = bits.join(' · ');
+
+  renderFilterSummary();
+}
+
+/* ---------- render: spending by day of week ---------- */
+function renderDow(){
+  const wrap = document.getElementById('dow');
+  const note = document.getElementById('dow-note');
+  const insight = document.getElementById('dow-insight');
+  wrap.innerHTML='';
+
+  const filtered = TXNS.filter(t=>matchesFilters(t) && t.type==='expense');
+  note.textContent = periodLabel(false);
+
+  const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const totals = new Array(7).fill(0);
+  const counts = new Array(7).fill(0);
+  filtered.forEach(t=>{
+    const idx = (t.date.getDay()+6)%7; // Mon=0 ... Sun=6
+    totals[idx]+=t.amount;
+    counts[idx]++;
+  });
+
+  if(filtered.length===0){
+    wrap.innerHTML = '<div class="empty-note" style="width:100%;">No expenses match these filters</div>';
+    insight.textContent='';
+    return;
+  }
+
+  const maxV = Math.max(1,...totals);
+  labels.forEach((lab,i)=>{
+    const col=document.createElement('div'); col.className='dow-col';
+    const amt=document.createElement('div'); amt.className='dow-amt'; amt.textContent = totals[i]>=1000 ? '₹'+Math.round(totals[i]/1000)+'k' : inr(totals[i]);
+    const bar=document.createElement('div'); bar.className='dow-bar'+(i>=5?' weekend':''); bar.style.height=(totals[i]/maxV*100||3)+'px'; bar.title=lab+': '+inr(totals[i])+' across '+counts[i]+' transactions';
+    const day=document.createElement('div'); day.className='dow-label'; day.textContent=lab;
+    col.appendChild(amt); col.appendChild(bar); col.appendChild(day);
+    wrap.appendChild(col);
+  });
+
+  const weekdayTotal = totals.slice(0,5).reduce((a,b)=>a+b,0);
+  const weekendTotal = totals.slice(5).reduce((a,b)=>a+b,0);
+  const maxIdx = totals.indexOf(Math.max(...totals));
+  const minIdx = totals.indexOf(Math.min(...totals.filter((v,i)=>counts[i]>0)));
+  const weekendAvgPerDay = weekendTotal/2;
+  const weekdayAvgPerDay = weekdayTotal/5;
+  const skew = weekendAvgPerDay > weekdayAvgPerDay
+    ? `Weekends run <b>${Math.round((weekendAvgPerDay/weekdayAvgPerDay-1)*100)}% higher</b> per day than weekdays.`
+    : `Weekdays run <b>${Math.round((weekdayAvgPerDay/weekendAvgPerDay-1)*100)}% higher</b> per day than weekends.`;
+  insight.innerHTML = `Most spending falls on <b>${labels[maxIdx]}</b> (${inr(totals[maxIdx])}), least on <b>${labels[minIdx]}</b>. ${skew}`;
+}
+
+/* ---------- render: category breakdown ---------- */
+function renderCategories(){
+  const title = document.getElementById('cat-card-title');
+  const note = document.getElementById('cat-card-note');
+  const list = document.getElementById('catlist');
+  list.innerHTML='';
+
+  const wantType = state.type==='income' ? 'income' : 'expense';
+  title.textContent = wantType==='income' ? 'Income by source' : 'Spending by category';
+  const filtered = TXNS.filter(t=>matchesFilters(t,{ignoreType:true}) && t.type===wantType);
+  const total = filtered.reduce((a,t)=>a+t.amount,0);
+  note.textContent = inr(total)+' total';
+
+  if(filtered.length===0){
+    list.innerHTML = '<div class="empty-note">No transactions match these filters</div>';
+    return;
+  }
+  const byCat = {};
+  filtered.forEach(t=>{ byCat[t.category]=(byCat[t.category]||0)+t.amount; });
+  Object.entries(byCat).sort((a,b)=>b[1]-a[1]).forEach(([name,amt])=>{
+    const meta = CAT_MAP[name] || {color:'#8B93A3', icon:'•'};
+    const pct = Math.round(amt/total*100);
+    const row=document.createElement('div'); row.className='cat-row';
+    row.innerHTML = `
+      <div class="cat-icon" style="background:${meta.color}22;">${meta.icon}</div>
+      <div class="cat-info">
+        <div class="cat-top"><span class="name">${name}</span><span class="amt">${inr(amt)} &middot; ${pct}%</span></div>
+        <div class="cat-track"><div class="cat-fill" style="width:${pct}%; background:${meta.color};"></div></div>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+/* ---------- render: monthly trend ---------- */
+function renderTrend(){
+  const trend = document.getElementById('trend');
+  trend.innerHTML='';
+  const months=[];
+  for(let m=5;m>=0;m--){
+    const start = daysAgo(m*30+29);
+    const end = daysAgo(m*30);
+    const label = end.toLocaleDateString('en-IN',{month:'short'});
+    const inTx = TXNS.filter(t=>t.date>=start && t.date<=end && t.type==='income' && (state.account==='all'||t.account===state.account));
+    const outTx = TXNS.filter(t=>t.date>=start && t.date<=end && t.type==='expense' && (state.account==='all'||t.account===state.account));
+    months.push({label, inAmt:inTx.reduce((a,t)=>a+t.amount,0), outAmt:outTx.reduce((a,t)=>a+t.amount,0)});
+  }
+  const tMax = Math.max(1,...months.flatMap(x=>[x.inAmt,x.outAmt]));
+  months.forEach(x=>{
+    const col=document.createElement('div'); col.className='trend-col';
+    const bars=document.createElement('div'); bars.className='trend-bars';
+    const bIn=document.createElement('div'); bIn.className='trend-bar in'; bIn.style.height=(x.inAmt/tMax*120||2)+'px';
+    const bOut=document.createElement('div'); bOut.className='trend-bar out'; bOut.style.height=(x.outAmt/tMax*120||2)+'px';
+    bars.appendChild(bIn); bars.appendChild(bOut);
+    const lab=document.createElement('div'); lab.className='trend-label'; lab.textContent=x.label;
+    col.appendChild(bars); col.appendChild(lab);
+    trend.appendChild(col);
+  });
+}
+
+/* ---------- render: per-account breakdown ---------- */
+function renderAccountBreakdown(){
+  const wrap = document.getElementById('acc-breakdown');
+  wrap.innerHTML='';
+  ACCOUNTS.forEach(acc=>{
+    const accTx = TXNS.filter(t=>t.account===acc && matchesFilters(t,{ignoreAccount:true}));
+    const income = accTx.filter(t=>t.type==='income').reduce((a,t)=>a+t.amount,0);
+    const expense = accTx.filter(t=>t.type==='expense').reduce((a,t)=>a+t.amount,0);
+    const byCat = {};
+    accTx.filter(t=>t.type==='expense').forEach(t=>{ byCat[t.category]=(byCat[t.category]||0)+t.amount; });
+    const top = Object.entries(byCat).sort((a,b)=>b[1]-a[1]).slice(0,3);
+
+    const card=document.createElement('div');
+    card.className = 'acc-card'+(state.account!=='all' && state.account!==acc ? ' dimmed':'');
+    card.innerHTML = `
+      <div class="acc-card-head">
+        <div class="acc-card-name">${acc}</div>
+        <div class="acc-card-bal">${inr(BALANCES[acc])}</div>
+      </div>
+      <div class="acc-stat-row">
+        <div class="acc-stat"><div class="l">Income</div><div class="v in">${inr(income)}</div></div>
+        <div class="acc-stat"><div class="l">Expense</div><div class="v out">${inr(expense)}</div></div>
+      </div>
+      ${top.length ? top.map(([name,amt])=>`<div class="acc-mini-cat"><span>${name}</span><span>${inr(amt)}</span></div>`).join('') : '<div class="empty-note" style="padding:10px 0;">No spending in range</div>'}
+    `;
+    wrap.appendChild(card);
+  });
+}
+
+/* ---------- render: top 10 transactions by amount ---------- */
+function renderTransactions(){
+  const filtered = TXNS.filter(t=>matchesFilters(t)).slice().sort((a,b)=>b.amount-a.amount).slice(0,10);
+  document.getElementById('tx-count').textContent = 'top '+filtered.length+' by amount';
+  const body = document.getElementById('txbody');
+  body.innerHTML='';
+  if(filtered.length===0){
+    body.innerHTML = '<tr><td colspan="6"><div class="empty-note">No transactions match these filters</div></td></tr>';
+    return;
+  }
+  filtered.forEach((t,i)=>{
+    const isIn = t.type==='income';
+    const tr=document.createElement('tr');
+    tr.innerHTML = `
+      <td class="tx-rank">${i+1}</td>
+      <td class="tx-date">${fmtDate(t.date)}</td>
+      <td class="tx-desc">${t.desc}<span class="tx-tag">#${t.tag}</span></td>
+      <td><span class="tx-cat">${t.category}</span></td>
+      <td class="tx-acc">${t.account}</td>
+      <td class="tx-amt ${isIn?'in':'out'}">${isIn?'+':'-'}${inr(t.amount)}</td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+function renderAll(){
+  renderHero();
+  renderDow();
+  renderCategories();
+  renderTrend();
+  renderAccountBreakdown();
+  renderTransactions();
+}
+
+/* ---------- wire up controls ---------- */
+document.getElementById('f-account').onchange = e=>{ state.account=e.target.value; renderAll(); };
+document.getElementById('f-period').onchange = e=>{
+  state.period=e.target.value;
+  const dr = document.getElementById('date-range');
+  if(state.period==='custom'){
+    dr.classList.add('show');
+    // seed sensible defaults the first time custom is picked
+    const fromInput = document.getElementById('f-date-from');
+    const toInput = document.getElementById('f-date-to');
+    if(!fromInput.value){ fromInput.value = isoDate(daysAgo(30)); state.customFrom = daysAgo(30); }
+    if(!toInput.value){ toInput.value = isoDate(TODAY); state.customTo = TODAY; }
+  } else {
+    dr.classList.remove('show');
+  }
+  renderAll();
+};
+document.getElementById('f-date-from').onchange = e=>{
+  state.customFrom = e.target.value ? new Date(e.target.value+'T00:00:00') : null;
+  renderAll();
+};
+document.getElementById('f-date-to').onchange = e=>{
+  state.customTo = e.target.value ? new Date(e.target.value+'T23:59:59') : null;
+  renderAll();
+};
+document.getElementById('f-type').querySelectorAll('span').forEach(s=>{
+  s.onclick = ()=>{
+    document.getElementById('f-type').querySelectorAll('span').forEach(x=>x.classList.remove('active'));
+    s.classList.add('active');
+    state.type = s.dataset.v;
+    state.categories.clear();
+    renderCategoryDropdown();
+    updateCatLabel();
+    renderAll();
+  };
+});
+document.getElementById('reset').onclick = ()=>{
+  state.account='all'; state.period='30'; state.type='all'; state.categories.clear();
+  state.customFrom=null; state.customTo=null;
+  document.getElementById('f-account').value='all';
+  document.getElementById('f-period').value='30';
+  document.getElementById('f-date-from').value='';
+  document.getElementById('f-date-to').value='';
+  document.getElementById('date-range').classList.remove('show');
+  document.getElementById('f-type').querySelectorAll('span').forEach(x=>x.classList.remove('active'));
+  document.getElementById('f-type').querySelector('[data-v="all"]').classList.add('active');
+  renderCategoryDropdown();
+  updateCatLabel();
+  renderAll();
+};
+
+renderCategoryDropdown();
+updateCatLabel();
+renderAll();
+</script>
+</body>
+</html>
