@@ -67,16 +67,21 @@ api.interceptors.response.use(
         const response = await axios.post(`${API_URL}/auth/refresh`, {
           refreshToken,
         });
-        
-        const { accessToken, refreshToken: newRefreshToken, user } = response.data.data;
-        await useAuthStore.getState().login(user, accessToken, newRefreshToken);
-        
+
+        const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+        await useAuthStore.getState().setTokens(accessToken, newRefreshToken);
+
         processQueue(null, accessToken);
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        await useAuthStore.getState().logout();
+        const status = (refreshError as AxiosError)?.response?.status;
+        // Only clear session when the refresh token itself is invalid/expired.
+        // Network or server errors must not force logout.
+        if (status === 401 || status === 403) {
+          await useAuthStore.getState().logout();
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

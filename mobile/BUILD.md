@@ -105,11 +105,13 @@ After installing the app, add the dashboard widget:
 1. Long-press your Android home screen
 2. Tap **Widgets**
 3. Find **My Assistant Dashboard**
-4. Drag it onto your home screen
+4. Drag it onto your home screen (default ~4×4 cells; you can resize it)
 
-The widget shows total balance, monthly income/expense, and net savings. It refreshes when you open the app or pull to refresh on the Dashboard tab. You can also tap **Settings → Refresh Widget**.
+The widget shows total balance, monthly income/expense, and net savings. It refreshes when you open the app while logged in, pull to refresh on the **Finances** tab, or tap **Settings → Refresh Widget**.
 
-Requires a new EAS build (widgets are not supported in Expo Go).
+**Native rebuild required:** Changes to widget size/`resizeMode` in `app.config.ts` only apply after a new Android build (`eas build` or `npx expo run:android`). JS-only OTA updates do not update the AppWidgetProvider XML. After installing a new build, remove and re-add the widget if the old size sticks.
+
+Requires a custom/EAS build (widgets are not supported in Expo Go).
 
 ---
 
@@ -117,6 +119,8 @@ Requires a new EAS build (widgets are not supported in Expo Go).
 
 | Issue | Solution |
 |-------|----------|
+| Forced to log in often | Ensure backend is deployed with refresh token TTL (`JWT_REFRESH_EXPIRES_IN=90d`) and the mobile app uses `setTokens` on refresh (not full login). |
+| Widget content clipped / too small | Install a build that includes the larger 4×4 widget config, then resize or re-add the widget. |
 | `npm ci` failed during EAS build | Ensure `mobile/.npmrc` and `mobile/package-lock.json` are committed. The project uses `legacy-peer-deps=true` because the widget library targets Expo 54+ while this app uses Expo 53. |
 | `package.json does not exist in .../build/mobile` | Ensure `mobile/package.json` is committed to git (not gitignored). Run builds from the `mobile/` directory: `cd mobile && eas build ...` |
 | `ENOENT .../mobile/android/gradlew` | Do not commit a partial `android/` folder. It is gitignored; EAS runs `expo prebuild` to generate it. Remove any tracked android files: `git rm -r --cached mobile/android` then commit and rebuild. |

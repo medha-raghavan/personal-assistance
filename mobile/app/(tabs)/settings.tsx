@@ -241,7 +241,7 @@ export default function SettingsScreen() {
                 <View className="ml-3 flex-1">
                   <Text style={{ color: colors.text }} className="font-medium">Dashboard Widget</Text>
                   <Text style={{ color: colors.textMuted }} className="text-xs">
-                    Long-press home screen → Widgets → My Assistant Dashboard
+                    Long-press home → Widgets → My Assistant Dashboard. Resize after placing. Size/layout changes need a new app install.
                   </Text>
                 </View>
               </View>
@@ -261,7 +261,9 @@ export default function SettingsScreen() {
                 </View>
                 <View className="ml-3 flex-1">
                   <Text style={{ color: colors.text }} className="font-medium">Refresh Widget</Text>
-                  <Text style={{ color: colors.textMuted }} className="text-xs">Sync latest balance and monthly stats</Text>
+                  <Text style={{ color: colors.textMuted }} className="text-xs">
+                    Sync latest balance (also refreshes on Finances pull-to-refresh)
+                  </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
               </TouchableOpacity>

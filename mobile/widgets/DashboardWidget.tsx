@@ -32,7 +32,7 @@ export function renderDashboardWidget(data: WidgetDashboardData) {
         width: 'match_parent',
         backgroundColor: '#111827',
         borderRadius: 16,
-        padding: 16,
+        padding: 12,
         flexDirection: 'column',
         justifyContent: 'space-between',
       }}
@@ -48,21 +48,21 @@ export function renderDashboardWidget(data: WidgetDashboardData) {
         <FlexWidget style={{ flexDirection: 'column' }}>
           <TextWidget
             text="My Assistant"
-            style={{ fontSize: 14, fontWeight: '700', color: '#f9fafb' }}
+            style={{ fontSize: 13, fontWeight: '700', color: '#f9fafb' }}
           />
           <TextWidget
-            text="Dashboard · This Month"
-            style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}
+            text="This Month"
+            style={{ fontSize: 10, color: '#9ca3af', marginTop: 1 }}
           />
         </FlexWidget>
         <FlexWidget
           style={{
             backgroundColor: '#0ea5e9',
             borderRadius: 999,
-            paddingLeft: 10,
-            paddingRight: 10,
-            paddingTop: 4,
-            paddingBottom: 4,
+            paddingLeft: 8,
+            paddingRight: 8,
+            paddingTop: 3,
+            paddingBottom: 3,
           }}
         >
           <TextWidget
@@ -73,14 +73,14 @@ export function renderDashboardWidget(data: WidgetDashboardData) {
       </FlexWidget>
 
       {!data.isLoggedIn ? (
-        <FlexWidget style={{ flexDirection: 'column', flexGap: 6 }}>
+        <FlexWidget style={{ flexDirection: 'column', flexGap: 4 }}>
           <TextWidget
             text="Sign in to view your dashboard"
-            style={{ fontSize: 16, fontWeight: '600', color: '#f9fafb' }}
+            style={{ fontSize: 14, fontWeight: '600', color: '#f9fafb' }}
           />
           <TextWidget
-            text="Open My Assistant and log in, then refresh the widget."
-            style={{ fontSize: 12, color: '#9ca3af' }}
+            text="Open the app, log in, then refresh the widget."
+            style={{ fontSize: 11, color: '#9ca3af' }}
           />
         </FlexWidget>
       ) : (
@@ -88,19 +88,19 @@ export function renderDashboardWidget(data: WidgetDashboardData) {
           <FlexWidget
             style={{
               backgroundColor: '#0c4a6e',
-              borderRadius: 14,
-              padding: 14,
+              borderRadius: 12,
+              padding: 10,
               flexDirection: 'column',
               width: 'match_parent',
             }}
           >
             <TextWidget
               text="Total Balance"
-              style={{ fontSize: 11, color: '#7dd3fc' }}
+              style={{ fontSize: 10, color: '#7dd3fc' }}
             />
             <TextWidget
               text={formatShortCurrency(data.totalBalance)}
-              style={{ fontSize: 28, fontWeight: '700', color: '#ffffff', marginTop: 4 }}
+              style={{ fontSize: 22, fontWeight: '700', color: '#ffffff', marginTop: 2 }}
             />
           </FlexWidget>
 
@@ -108,15 +108,15 @@ export function renderDashboardWidget(data: WidgetDashboardData) {
             style={{
               flexDirection: 'row',
               width: 'match_parent',
-              flexGap: 10,
+              flexGap: 8,
             }}
           >
             <FlexWidget
               style={{
                 flex: 1,
                 backgroundColor: '#14532d',
-                borderRadius: 12,
-                padding: 12,
+                borderRadius: 10,
+                padding: 10,
                 flexDirection: 'column',
               }}
             >
@@ -126,7 +126,7 @@ export function renderDashboardWidget(data: WidgetDashboardData) {
               />
               <TextWidget
                 text={formatShortCurrency(data.income)}
-                style={{ fontSize: 16, fontWeight: '700', color: '#22c55e', marginTop: 4 }}
+                style={{ fontSize: 14, fontWeight: '700', color: '#22c55e', marginTop: 2 }}
               />
             </FlexWidget>
 
@@ -134,8 +134,8 @@ export function renderDashboardWidget(data: WidgetDashboardData) {
               style={{
                 flex: 1,
                 backgroundColor: '#450a0a',
-                borderRadius: 12,
-                padding: 12,
+                borderRadius: 10,
+                padding: 10,
                 flexDirection: 'column',
               }}
             >
@@ -145,7 +145,7 @@ export function renderDashboardWidget(data: WidgetDashboardData) {
               />
               <TextWidget
                 text={formatShortCurrency(data.expense)}
-                style={{ fontSize: 16, fontWeight: '700', color: '#ef4444', marginTop: 4 }}
+                style={{ fontSize: 14, fontWeight: '700', color: '#ef4444', marginTop: 2 }}
               />
             </FlexWidget>
           </FlexWidget>
@@ -159,12 +159,12 @@ export function renderDashboardWidget(data: WidgetDashboardData) {
             }}
           >
             <TextWidget
-              text={`Net ${formatShortCurrency(data.net)} · Save ${data.savingsRate.toFixed(0)}%`}
-              style={{ fontSize: 12, color: '#e5e7eb', fontWeight: '600' }}
+              text={`Net ${formatShortCurrency(data.net)} · ${data.savingsRate.toFixed(0)}%`}
+              style={{ fontSize: 11, color: '#e5e7eb', fontWeight: '600' }}
             />
             <TextWidget
               text={updatedLabel}
-              style={{ fontSize: 10, color: '#6b7280' }}
+              style={{ fontSize: 9, color: '#6b7280' }}
             />
           </FlexWidget>
         </>

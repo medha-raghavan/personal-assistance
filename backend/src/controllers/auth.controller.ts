@@ -122,10 +122,17 @@ export async function refreshToken(
     
     res.json({
       success: true,
-      data: tokens,
+      data: {
+        ...tokens,
+        user: {
+          id: user._id.toString(),
+          email: user.email,
+          name: user.name,
+        },
+      },
     });
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
+    if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
       next(new ApiError(401, 'Invalid refresh token'));
     } else {
       next(error);

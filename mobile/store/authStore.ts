@@ -16,10 +16,11 @@ interface AuthState {
   isLoading: boolean;
   initialize: () => Promise<void>;
   login: (user: User, accessToken: string, refreshToken: string) => Promise<void>;
+  setTokens: (accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   accessToken: null,
   refreshToken: null,
@@ -64,6 +65,16 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
 
     refreshDashboardWidget().catch(() => undefined);
+  },
+
+  setTokens: async (accessToken, refreshToken) => {
+    await SecureStore.setItemAsync('accessToken', accessToken);
+    await SecureStore.setItemAsync('refreshToken', refreshToken);
+    set({
+      accessToken,
+      refreshToken,
+      isAuthenticated: Boolean(get().user),
+    });
   },
 
   logout: async () => {
