@@ -5,6 +5,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://raspberrypi.tail38a9a
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -39,6 +40,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
     
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
@@ -64,9 +69,11 @@ api.interceptors.response.use(
       }
 
       try {
-        const response = await axios.post(`${API_URL}/auth/refresh`, {
-          refreshToken,
-        });
+        const response = await axios.post(
+          `${API_URL}/auth/refresh`,
+          { refreshToken },
+          { timeout: 30000 }
+        );
 
         const { accessToken, refreshToken: newRefreshToken } = response.data.data;
         await useAuthStore.getState().setTokens(accessToken, newRefreshToken);

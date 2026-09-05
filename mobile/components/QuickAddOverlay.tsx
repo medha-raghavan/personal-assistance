@@ -15,6 +15,7 @@ import { Picker } from '@react-native-picker/picker';
 import { usePaymentStore } from '../store/paymentStore';
 import { useAuthStore } from '../store/authStore';
 import { sectionService, categoryService, transactionService } from '../services/api';
+import { ParsedPayment } from '../services/paymentParser';
 import { useTheme } from './ThemeProvider';
 
 function formatCurrency(amount: number): string {
@@ -37,15 +38,37 @@ interface Category {
   color: string;
 }
 
+interface PendingPayment extends ParsedPayment {
+  id: string;
+  timestamp: number;
+  dismissed: boolean;
+}
+
+interface SaveTransactionInput {
+  paymentId: string;
+  sectionId: string;
+  amount: number;
+  type: 'credit' | 'debit';
+  description: string;
+  categoryId?: string;
+  transactionDate: string;
+}
+
+function pickDefaultSection(sections: Section[]): string {
+  const digitalWallet = sections.find((section) => section.type === 'digital_wallet');
+  const checking = sections.find((section) => section.type === 'checking');
+  return digitalWallet?._id || checking?._id || sections[0]._id;
+}
+
 export function QuickAddOverlay() {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuthStore();
   const { colors, isDark } = useTheme();
-  const { showQuickAdd, currentPayment, hidePaymentOverlay, dismissPayment, clearCurrentPayment } =
-    usePaymentStore();
+  const { showQuickAdd, currentPayment, hidePaymentOverlay, dismissPayment } = usePaymentStore();
 
   const [selectedSection, setSelectedSection] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [frozenPayment, setFrozenPayment] = useState<PendingPayment | null>(null);
   const [slideAnim] = useState(new Animated.Value(Dimensions.get('window').height));
 
   const { data: sections = [] } = useQuery({
@@ -60,8 +83,44 @@ export function QuickAddOverlay() {
     enabled: isAuthenticated,
   });
 
+  const createMutation = useMutation({
+    mutationFn: (data: SaveTransactionInput) =>
+      transactionService.create({
+        sectionId: data.sectionId,
+        amount: data.amount,
+        type: data.type,
+        description: data.description,
+        categoryId: data.categoryId,
+        transactionDate: data.transactionDate,
+      }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['sections'] });
+      Alert.alert('Success', 'Transaction recorded!');
+      dismissPayment(variables.paymentId);
+      setSelectedCategory('');
+      setFrozenPayment(null);
+      createMutation.reset();
+    },
+    onError: (error: any) => {
+      const message =
+        error.code === 'ECONNABORTED'
+          ? 'Request timed out. Check your connection and try again.'
+          : error.response?.data?.error?.message || 'Failed to save transaction';
+      Alert.alert('Error', message);
+      setFrozenPayment(null);
+    },
+  });
+
+  const displayPayment = frozenPayment ?? currentPayment;
+  const isSaving = createMutation.isPending;
+  const shouldRenderOverlay =
+    isAuthenticated && ((showQuickAdd && !!displayPayment) || isSaving);
+
   useEffect(() => {
-    if (showQuickAdd) {
+    if (shouldRenderOverlay) {
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -75,37 +134,21 @@ export function QuickAddOverlay() {
         useNativeDriver: true,
       }).start();
     }
-  }, [showQuickAdd]);
+  }, [shouldRenderOverlay, slideAnim]);
 
   useEffect(() => {
-    if (sections.length > 0 && !selectedSection) {
-      const digitalWallet = sections.find((s: Section) => s.type === 'digital_wallet');
-      const checking = sections.find((s: Section) => s.type === 'checking');
-      setSelectedSection(digitalWallet?._id || checking?._id || sections[0]._id);
+    if (!showQuickAdd || !currentPayment || isSaving) {
+      return;
     }
-  }, [sections, selectedSection]);
 
-  const createMutation = useMutation({
-    mutationFn: (data: {
-      sectionId: string;
-      amount: number;
-      type: 'credit' | 'debit';
-      description: string;
-      categoryId?: string;
-      transactionDate: string;
-    }) => transactionService.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['sections'] });
-      Alert.alert('Success', 'Transaction recorded!');
-      handleClose();
-    },
-    onError: (error: any) => {
-      Alert.alert('Error', error.response?.data?.error?.message || 'Failed to save transaction');
-    },
-  });
+    setSelectedCategory('');
+
+    if (sections.length > 0) {
+      setSelectedSection(pickDefaultSection(sections));
+    } else {
+      setSelectedSection('');
+    }
+  }, [showQuickAdd, currentPayment?.id, sections, isSaving]);
 
   const handleSave = () => {
     if (!currentPayment) return;
@@ -113,40 +156,46 @@ export function QuickAddOverlay() {
       Alert.alert('Error', 'Please select an account');
       return;
     }
+    if (!Number.isFinite(currentPayment.amount) || currentPayment.amount <= 0) {
+      Alert.alert('Error', 'Invalid payment amount');
+      return;
+    }
+
+    setFrozenPayment(currentPayment);
 
     createMutation.mutate({
+      paymentId: currentPayment.id,
       sectionId: selectedSection,
       amount: currentPayment.amount,
       type: currentPayment.type,
       description: currentPayment.merchant || 'Payment',
       categoryId: selectedCategory || undefined,
-      transactionDate: new Date().toISOString(),
+      transactionDate: (currentPayment.date ?? new Date()).toISOString(),
     });
   };
 
-  const handleClose = () => {
-    if (currentPayment) {
-      dismissPayment(currentPayment.id);
-    }
-    clearCurrentPayment();
-    setSelectedCategory('');
-  };
-
   const handleDismiss = () => {
+    if (isSaving) {
+      Alert.alert('Saving', 'Please wait for the transaction to finish saving.');
+      return;
+    }
+
     if (currentPayment) {
       dismissPayment(currentPayment.id);
     }
     hidePaymentOverlay();
+    setFrozenPayment(null);
+    createMutation.reset();
   };
 
-  if (!showQuickAdd || !currentPayment || !isAuthenticated) {
+  if (!shouldRenderOverlay || !displayPayment) {
     return null;
   }
 
-  const amountColor = currentPayment.type === 'credit' ? colors.income : colors.expense;
+  const amountColor = displayPayment.type === 'credit' ? colors.income : colors.expense;
 
   return (
-    <Modal visible={showQuickAdd} transparent animationType="none">
+    <Modal visible={shouldRenderOverlay} transparent animationType="none">
       <View className="flex-1 bg-black/50 justify-end">
         <Animated.View
           style={{
@@ -170,7 +219,7 @@ export function QuickAddOverlay() {
                 style={{ backgroundColor: amountColor + '22' }}
               >
                 <Ionicons
-                  name={currentPayment.type === 'credit' ? 'arrow-down' : 'arrow-up'}
+                  name={displayPayment.type === 'credit' ? 'arrow-down' : 'arrow-up'}
                   size={20}
                   color={amountColor}
                 />
@@ -178,27 +227,27 @@ export function QuickAddOverlay() {
               <View className="ml-3">
                 <Text style={{ color: colors.textMuted }} className="text-xs">Payment Detected</Text>
                 <Text style={{ color: colors.text }} className="font-semibold">
-                  {currentPayment.bank || 'UPI'} Transaction
+                  {displayPayment.bank || 'UPI'} Transaction
                 </Text>
               </View>
             </View>
-            <TouchableOpacity onPress={handleDismiss} className="p-2">
-              <Ionicons name="close" size={24} color={colors.icon} />
+            <TouchableOpacity onPress={handleDismiss} className="p-2" disabled={isSaving}>
+              <Ionicons name="close" size={24} color={isSaving ? colors.textMuted : colors.icon} />
             </TouchableOpacity>
           </View>
 
           <ScrollView className="p-4 max-h-96">
             <View className="items-center py-4">
               <Text style={{ color: amountColor }} className="text-4xl font-bold">
-                {currentPayment.type === 'credit' ? '+' : '-'}
-                {formatCurrency(currentPayment.amount)}
+                {displayPayment.type === 'credit' ? '+' : '-'}
+                {formatCurrency(displayPayment.amount)}
               </Text>
               <Text style={{ color: colors.textSecondary }} className="mt-1" numberOfLines={2}>
-                {currentPayment.merchant}
+                {displayPayment.merchant}
               </Text>
-              {currentPayment.upiId && (
+              {displayPayment.upiId && (
                 <Text style={{ color: colors.textMuted }} className="text-xs mt-1">
-                  {currentPayment.upiId}
+                  {displayPayment.upiId}
                 </Text>
               )}
             </View>
@@ -211,7 +260,8 @@ export function QuickAddOverlay() {
               >
                 <Picker
                   selectedValue={selectedSection}
-                  onValueChange={(value) => setSelectedSection(value)}
+                  onValueChange={(value) => value && setSelectedSection(value)}
+                  enabled={!isSaving}
                   style={{ color: colors.text }}
                   dropdownIconColor={colors.icon}
                 >
@@ -237,6 +287,7 @@ export function QuickAddOverlay() {
                 <Picker
                   selectedValue={selectedCategory}
                   onValueChange={(value) => setSelectedCategory(value)}
+                  enabled={!isSaving}
                   style={{ color: colors.text }}
                   dropdownIconColor={colors.icon}
                 >
@@ -266,7 +317,8 @@ export function QuickAddOverlay() {
                         ? colors.primary + '22'
                         : colors.panel2,
                   }}
-                  onPress={() => setSelectedCategory(category._id)}
+                  onPress={() => !isSaving && setSelectedCategory(category._id)}
+                  disabled={isSaving}
                 >
                   <Text
                     style={{
@@ -283,23 +335,22 @@ export function QuickAddOverlay() {
             <View className="flex-row gap-3 pb-6">
               <TouchableOpacity
                 className="flex-1 py-4 rounded-xl items-center"
-                style={{ backgroundColor: colors.panel2 }}
+                style={{ backgroundColor: colors.panel2, opacity: isSaving ? 0.5 : 1 }}
                 onPress={handleDismiss}
+                disabled={isSaving}
               >
                 <Text style={{ color: colors.textSecondary }} className="font-medium">Skip</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-1 py-4 rounded-xl items-center"
                 style={{
-                  backgroundColor: createMutation.isPending
-                    ? colors.primary + '88'
-                    : colors.primary,
+                  backgroundColor: isSaving ? colors.primary + '88' : colors.primary,
                 }}
                 onPress={handleSave}
-                disabled={createMutation.isPending}
+                disabled={isSaving}
               >
                 <Text className="text-white font-semibold">
-                  {createMutation.isPending ? 'Saving...' : 'Save Transaction'}
+                  {isSaving ? 'Saving...' : 'Save Transaction'}
                 </Text>
               </TouchableOpacity>
             </View>
