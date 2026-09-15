@@ -12,6 +12,6 @@ AppRegistry.registerHeadlessTask(
       return;
     }
     const { handleIncomingSms } = require('./services/smsListener');
-    handleIncomingSms(data.originatingAddress, data.body);
+    await handleIncomingSms(data.originatingAddress, data.body);
   }
 );

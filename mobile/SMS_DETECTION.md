@@ -1,39 +1,36 @@
 # Payment Auto-Detection Setup Guide
 
-This feature automatically detects payments from bank/UPI SMS messages and prompts you to record them as transactions.
+This feature automatically detects payments from bank/UPI SMS messages and prompts you to record them as transactions — including when the app is in the background or closed.
 
 ## How It Works
 
-1. **SMS Listener**: The app monitors incoming SMS messages
+1. **SMS Listener**: The app monitors incoming SMS messages (foreground service + headless task)
 2. **Payment Parser**: Identifies and extracts payment details from bank/UPI messages
-3. **Quick Add Overlay**: Shows a popup with pre-filled transaction details
-4. **One-Tap Save**: Select account, category, and save instantly
+3. **Heads-up notification**: If the app is not open, a high-priority popup notification appears
+4. **Quick Add Overlay**: Tap the notification (or stay in-app) to review pre-filled details
+5. **One-Tap Save**: Select account, category, and save instantly
+
+Pending payments are stored on-device so a detection that happened while the app was closed is still available when you open it.
 
 ## Setup Instructions
 
-### Step 1: Install SMS Listener Library
-
-The dependency is included in `package.json`:
+### Step 1: Install Dependencies
 
 ```bash
 cd mobile
 npm install
 ```
 
-This installs `react-native-android-sms-listener`, which requires a native rebuild (EAS build or `expo run:android` — not Expo Go).
+Requires a native rebuild (`eas build` or `expo run:android` — not Expo Go).
 
-### Step 2: Add Permissions to AndroidManifest.xml
+### Step 2: Permissions
 
-The library should automatically add these, but verify they exist in `android/app/src/main/AndroidManifest.xml`:
+The app needs:
 
-```xml
-<uses-permission android:name="android.permission.RECEIVE_SMS" />
-<uses-permission android:name="android.permission.READ_SMS" />
-```
+- `RECEIVE_SMS` / `READ_SMS` — detect bank messages
+- `POST_NOTIFICATIONS` — show the payment popup when the app is closed (Android 13+)
 
 ### Step 3: Rebuild the App
-
-Since this requires native modules, you need to rebuild with EAS:
 
 ```bash
 # Development build
@@ -45,10 +42,18 @@ eas build -p android --profile preview
 
 ### Step 4: Grant Permissions
 
-When you first open the app:
-1. Go to Settings tab
-2. Enable "SMS Detection"
-3. Grant SMS permissions when prompted
+1. Open the app → Settings
+2. Enable **SMS Detection**
+3. Grant **SMS** and **Notifications** when prompted
+4. On Android 13+, also allow notifications in system Settings if the popup does not appear
+
+## What You See
+
+| App state | What happens |
+|-----------|--------------|
+| App open | Quick Add sheet slides up immediately |
+| App background / closed | Heads-up notification: “Payment detected — tap to save” |
+| Tap notification | App opens with that payment in Quick Add |
 
 ## Supported SMS Formats
 
@@ -76,23 +81,24 @@ When you first open the app:
 
 ## Troubleshooting
 
+### No Popup When App Is Closed
+
+1. Grant notification permission (Android Settings → Apps → My Assistant → Notifications)
+2. Ensure SMS Detection is enabled in-app
+3. Rebuild after adding `expo-notifications` (native module)
+4. Confirm the SMS is from a bank/UPI sender and matches a known pattern
+
 ### SMS Detection Not Working
 
-1. **Check permissions**: Go to Android Settings > Apps > Personal Finance > Permissions > SMS
-2. **Check if enabled**: Settings > Payment Auto-Detection > SMS Detection toggle
-3. **Verify library**: Run `npm list react-native-android-sms-listener`
+1. **Check permissions**: Android Settings → Apps → My Assistant → Permissions → SMS
+2. **Check if enabled**: Settings → Payment Auto-Detection → SMS Detection toggle
+3. **Verify library**: `npm list expo-sms-listener`
 
-### Parser Not Recognizing SMS
-
-The parser looks for specific patterns. If your bank uses a different format:
-1. Use "Test Parser" to check if it's detected
-2. Open an issue with the SMS format (redact personal info)
-
-### Overlay Not Showing
+### Overlay Not Showing After Tap
 
 1. Make sure you're logged in
-2. Check if SMS detection is enabled in Settings
-3. The SMS must be from a recognized sender (bank sender IDs)
+2. Pending payments are listed under Settings → Pending Payments
+3. Force-close and reopen the app once after granting notification permission
 
 ## Privacy & Security
 
@@ -106,12 +112,16 @@ The parser looks for specific patterns. If your bank uses a different format:
 - **Android Only**: iOS does not allow SMS reading
 - **Requires Rebuild**: Changes to native modules require app rebuild
 - **Google Play**: READ_SMS permission requires justification for Play Store
+- **True system overlay** (draw over other apps) is not used; Android heads-up notifications are the supported popup UX
 
 ## Files
 
 | File | Description |
 |------|-------------|
 | `services/paymentParser.ts` | SMS parsing logic and regex patterns |
-| `services/smsListener.ts` | SMS listener initialization and handling |
+| `services/smsListener.ts` | SMS listener + background detection |
+| `services/paymentNotifications.ts` | Heads-up payment notifications |
+| `services/paymentPersistence.ts` | On-device pending payment storage |
 | `store/paymentStore.ts` | State management for detected payments |
 | `components/QuickAddOverlay.tsx` | Quick add UI component |
+| `index.ts` | Headless task registration for closed-app SMS |

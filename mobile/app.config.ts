@@ -46,6 +46,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     permissions: [
       'android.permission.RECEIVE_SMS',
       'android.permission.READ_SMS',
+      'android.permission.POST_NOTIFICATIONS',
+      'android.permission.VIBRATE',
     ],
   },
   web: {
@@ -56,6 +58,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     'expo-secure-store',
+    [
+      'expo-notifications',
+      {
+        icon: './assets/icon.png',
+        color: '#0ea5e9',
+        defaultChannel: 'payment-detected',
+      },
+    ],
     [
       'expo-build-properties',
       {

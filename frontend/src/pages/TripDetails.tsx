@@ -572,9 +572,8 @@ export function TripDetails() {
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase border-r border-gray-700 min-w-[100px]">Date</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase border-r border-gray-700 min-w-[200px]">Description</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase border-r border-gray-700 min-w-[100px]">Category</th>
+                  <th className="px-2 py-3 text-center text-xs font-medium text-gray-400 uppercase border-r border-gray-700 w-14 min-w-[3rem] max-w-[3.5rem]">Ccy</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase border-r border-gray-700 min-w-[100px]">Cost</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase border-r border-gray-700 min-w-[80px]">Currency</th>
                   {trip.members.map((member) => (
                     <th
                       key={member._id}
@@ -591,7 +590,7 @@ export function TripDetails() {
               <tbody className="divide-y divide-gray-700">
                 {allItems.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + trip.members.length} className="px-4 py-8 text-center text-gray-400">
+                    <td colSpan={4 + trip.members.length} className="px-4 py-8 text-center text-gray-400">
                       No expenses yet
                     </td>
                   </tr>
@@ -607,9 +606,6 @@ export function TripDetails() {
                     const splits = isExp
                       ? (item.data as TripExpense).splits
                       : (item.data as Transaction).tripSplits;
-                    const category = isExp
-                      ? (item.data as TripExpense).category || '-'
-                      : 'Linked';
                     const currency = isExp
                       ? (item.data as TripExpense).currency
                       : (item.data as Transaction).currency;
@@ -634,11 +630,12 @@ export function TripDetails() {
                             <p className="text-xs text-gray-500 mt-1">Paid by: {paidBy || '-'}</p>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-400 border-r border-gray-700">{category}</td>
+                        <td className="px-2 py-3 text-center text-gray-400 border-r border-gray-700 w-14 max-w-[3.5rem] text-xs">
+                          {currency}
+                        </td>
                         <td className="px-4 py-3 text-right text-white font-medium border-r border-gray-700">
                           {amount.toLocaleString()}
                         </td>
-                        <td className="px-4 py-3 text-center text-gray-400 border-r border-gray-700">{currency}</td>
                         {trip.members.map((member) => {
                           const memberShare = getMemberSplit(member._id!);
                           const isPayer = member._id === paidByMemberId;
@@ -675,11 +672,11 @@ export function TripDetails() {
               </tbody>
               <tfoot className="bg-gray-700/30 border-t-2 border-gray-600 sticky bottom-0">
                 <tr>
-                  <td colSpan={3} className="px-4 py-3 text-white font-semibold border-r border-gray-700">Total</td>
+                  <td colSpan={2} className="px-4 py-3 text-white font-semibold border-r border-gray-700">Total</td>
+                  <td className="px-2 py-3 border-r border-gray-700"></td>
                   <td className="px-4 py-3 text-right text-white font-bold border-r border-gray-700">
                     {grandTotal.toLocaleString()}
                   </td>
-                  <td className="px-4 py-3 border-r border-gray-700"></td>
                   {trip.members.map((member) => {
                     let totalNet = 0;
 

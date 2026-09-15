@@ -1,6 +1,10 @@
-import { Platform, Alert, Linking } from 'react-native';
+import { Platform, Alert, Linking, AppState } from 'react-native';
 import { parsePaymentSMS } from './paymentParser';
 import { usePaymentStore } from '../store/paymentStore';
+import {
+  requestPaymentNotificationPermission,
+  showPaymentDetectedNotification,
+} from './paymentNotifications';
 
 type SmsSubscription = { remove: () => void };
 
@@ -17,25 +21,44 @@ function getSmsApi() {
   return smsApi;
 }
 
-export function handleIncomingSms(sender: string, body: string) {
-  const { smsListenerEnabled, addPendingPayment } = usePaymentStore.getState();
+export async function handleIncomingSms(sender: string, body: string): Promise<void> {
+  const store = usePaymentStore.getState();
 
-  if (!smsListenerEnabled) {
+  if (!store.hydrated) {
+    await store.hydrate();
+  }
+
+  if (!usePaymentStore.getState().smsListenerEnabled) {
     return;
   }
 
   const payment = parsePaymentSMS(body, sender);
 
-  if (payment && payment.amount > 0) {
-    console.log('Payment detected:', {
-      sender,
-      amount: payment.amount,
-      merchant: payment.merchant,
-      type: payment.type,
-      bank: payment.bank,
-    });
+  if (!payment || payment.amount <= 0) {
+    return;
+  }
 
-    addPendingPayment(payment);
+  console.log('Payment detected:', {
+    sender,
+    amount: payment.amount,
+    merchant: payment.merchant,
+    type: payment.type,
+    bank: payment.bank,
+  });
+
+  const isAppActive = AppState.currentState === 'active';
+  const pending = usePaymentStore.getState().addPendingPayment(payment, {
+    showOverlay: isAppActive,
+  });
+
+  if (!pending) {
+    return;
+  }
+
+  // When the app is not on screen, show a heads-up notification so the user
+  // can open Quick Add without hunting for the app first.
+  if (!isAppActive) {
+    await showPaymentDetectedNotification(pending);
   }
 }
 
@@ -51,6 +74,8 @@ export async function initializeSmsListener(): Promise<boolean> {
     console.log('SMS permission denied');
     return false;
   }
+
+  await requestPaymentNotificationPermission();
 
   try {
     await api.startSmsListenerServiceAsync();
@@ -75,7 +100,7 @@ function startListening(): boolean {
 
   try {
     smsSubscription = api.addSmsListener((message) => {
-      handleIncomingSms(message.originatingAddress, message.body);
+      void handleIncomingSms(message.originatingAddress, message.body);
     });
 
     console.log('SMS listener started');
@@ -122,7 +147,8 @@ export function showSmsSetupInstructions() {
     'SMS Auto-Detection Setup',
     'To enable automatic payment detection:\n\n' +
       '1. Rebuild the app with EAS (native SMS module required)\n' +
-      '2. Grant SMS permissions when prompted\n\n' +
+      '2. Grant SMS and notification permissions when prompted\n' +
+      '3. When a bank SMS arrives while the app is closed, a popup notification opens Quick Add\n\n' +
       'Note: This feature only works on Android.',
     [
       { text: 'OK', style: 'default' },

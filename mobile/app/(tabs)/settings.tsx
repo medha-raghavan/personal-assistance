@@ -78,7 +78,7 @@ export default function SettingsScreen() {
       } else {
         Alert.alert(
           'Permission Required',
-          'SMS permission is required to detect payments automatically. Please grant the permission in Settings.',
+          'SMS and notification permissions are required to detect payments and show a popup when the app is closed.',
           [{ text: 'OK' }]
         );
       }
@@ -291,7 +291,7 @@ export default function SettingsScreen() {
                     <Text style={{ color: colors.textMuted }} className="text-xs">
                       {smsAvailable
                         ? smsPermissionGranted
-                          ? 'Auto-detect payments from SMS'
+                          ? 'Popup when bank SMS arrives (even if app is closed)'
                           : 'Permission required'
                         : 'Library not installed'}
                     </Text>

@@ -12,10 +12,9 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
-import { usePaymentStore } from '../store/paymentStore';
+import { usePaymentStore, PendingPayment } from '../store/paymentStore';
 import { useAuthStore } from '../store/authStore';
 import { sectionService, categoryService, transactionService } from '../services/api';
-import { ParsedPayment } from '../services/paymentParser';
 import { useTheme } from './ThemeProvider';
 
 function formatCurrency(amount: number): string {
@@ -36,12 +35,6 @@ interface Category {
   _id: string;
   name: string;
   color: string;
-}
-
-interface PendingPayment extends ParsedPayment {
-  id: string;
-  timestamp: number;
-  dismissed: boolean;
 }
 
 interface SaveTransactionInput {

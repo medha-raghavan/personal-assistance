@@ -586,6 +586,7 @@ export default function TripDetailsScreen() {
     paidByMemberName: string;
     date: string;
     category: string;
+    currency: string;
     splits?: { memberId: string; memberName: string; amount: number }[];
     original: any;
   };
@@ -599,6 +600,7 @@ export default function TripDetailsScreen() {
       paidByMemberName: e.paidByMemberName,
       date: e.date,
       category: e.category || '',
+      currency: e.currency || trip.defaultCurrency || 'INR',
       splits: e.splits,
       original: e,
     })),
@@ -610,6 +612,7 @@ export default function TripDetailsScreen() {
       paidByMemberName: t.paidByMemberName || 'Unknown',
       date: t.transactionDate,
       category: 'Linked Transaction',
+      currency: t.currency || trip.defaultCurrency || 'INR',
       splits: t.tripSplits,
       original: t,
     })),
@@ -811,8 +814,8 @@ export default function TripDetailsScreen() {
                       <View className="w-40 px-3 py-3 border-r" style={{ borderRightColor: colors.border }}>
                         <Text style={{ color: colors.textMuted }} className="text-xs font-medium">DESCRIPTION</Text>
                       </View>
-                      <View className="w-24 px-3 py-3 border-r" style={{ borderRightColor: colors.border }}>
-                        <Text style={{ color: colors.textMuted }} className="text-xs font-medium">CATEGORY</Text>
+                      <View className="w-12 px-1 py-3 border-r" style={{ borderRightColor: colors.border }}>
+                        <Text style={{ color: colors.textMuted }} className="text-xs font-medium text-center">CCY</Text>
                       </View>
                       <View className="w-24 px-3 py-3 border-r" style={{ borderRightColor: colors.border }}>
                         <Text style={{ color: colors.textMuted }} className="text-xs font-medium text-right">COST</Text>
@@ -868,9 +871,9 @@ export default function TripDetailsScreen() {
                               Paid by: {item.paidByMemberName}
                             </Text>
                           </View>
-                          <View className="w-24 px-3 py-3 border-r justify-center" style={{ borderRightColor: colors.border }}>
-                            <Text style={{ color: colors.textMuted }} className="text-xs" numberOfLines={1}>
-                              {item.category || '-'}
+                          <View className="w-12 px-1 py-3 border-r justify-center" style={{ borderRightColor: colors.border }}>
+                            <Text style={{ color: colors.textMuted }} className="text-xs text-center" numberOfLines={1}>
+                              {item.currency}
                             </Text>
                           </View>
                           <View className="w-24 px-3 py-3 border-r justify-center" style={{ borderRightColor: colors.border }}>
@@ -913,7 +916,7 @@ export default function TripDetailsScreen() {
                         <Text style={{ color: colors.text }} className="text-xs font-bold">TOTAL</Text>
                       </View>
                       <View className="w-40 px-3 py-3 border-r" style={{ borderRightColor: colors.border }} />
-                      <View className="w-24 px-3 py-3 border-r" style={{ borderRightColor: colors.border }} />
+                      <View className="w-12 px-1 py-3 border-r" style={{ borderRightColor: colors.border }} />
                       <View className="w-24 px-3 py-3 border-r" style={{ borderRightColor: colors.border }}>
                         <Text style={{ color: colors.text }} className="text-xs font-bold text-right">
                           {totalExpenses.toLocaleString()}

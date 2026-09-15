@@ -111,6 +111,8 @@ The widget shows total balance, monthly income/expense, and net savings. It refr
 
 **Native rebuild required:** Changes to widget size/`resizeMode` in `app.config.ts` only apply after a new Android build (`eas build` or `npx expo run:android`). JS-only OTA updates do not update the AppWidgetProvider XML. After installing a new build, remove and re-add the widget if the old size sticks.
 
+**SMS payment popup:** After adding `expo-notifications`, rebuild the Android app and grant notification permission so bank SMS can show a heads-up alert when the app is closed.
+
 Requires a custom/EAS build (widgets are not supported in Expo Go).
 
 ---
