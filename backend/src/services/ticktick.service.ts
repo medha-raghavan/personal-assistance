@@ -238,6 +238,7 @@ export async function disconnectTickTick(userId: string): Promise<void> {
   }
 
   await User.findByIdAndUpdate(userId, { $unset: { ticktick: 1 } });
+  invalidateWeekDashboardCache(userId);
 }
 
 async function getValidAccessToken(user: IUser): Promise<string> {
@@ -429,27 +430,6 @@ async function fetchTaskDetail(
   }
 }
 
-async function enrichTasksWithDetails(
-  accessToken: string,
-  tasks: TickTickTask[],
-  concurrency = 6
-): Promise<TickTickTask[]> {
-  const enriched: TickTickTask[] = [];
-
-  for (let i = 0; i < tasks.length; i += concurrency) {
-    const batch = tasks.slice(i, i + concurrency);
-    const results = await Promise.all(
-      batch.map(async (task) => {
-        const detail = await fetchTaskDetail(accessToken, task.projectId, task.id);
-        return detail ? mergeTaskRecord(task, detail) : task;
-      })
-    );
-    enriched.push(...results);
-  }
-
-  return enriched;
-}
-
 async function fetchTasksByFilter(
   accessToken: string,
   filter: Record<string, unknown>
@@ -479,13 +459,18 @@ async function fetchTasksByTag(
 ): Promise<TickTickTask[]> {
   const merged = new Map<string, TickTickTask>();
 
-  for (const status of [0, 2] as const) {
-    const filter: Record<string, unknown> = { tag: [tag], status: [status] };
-    if (projectId) {
-      filter.projectIds = [projectId];
-    }
+  const results = await Promise.all(
+    ([0, 2] as const).map(async (status) => {
+      const filter: Record<string, unknown> = { tag: [tag], status: [status] };
+      if (projectId) {
+        filter.projectIds = [projectId];
+      }
+      return fetchTasksByFilter(accessToken, filter);
+    })
+  );
 
-    for (const task of await fetchTasksByFilter(accessToken, filter)) {
+  for (const tasks of results) {
+    for (const task of tasks) {
       merged.set(task.id, task);
     }
   }
@@ -493,42 +478,21 @@ async function fetchTasksByTag(
   return Array.from(merged.values());
 }
 
-async function fetchOpenTasksForProjects(
-  accessToken: string,
-  projects: TickTickProject[]
-): Promise<TickTickTask[]> {
-  const merged = new Map<string, TickTickTask>();
-
-  const projectIds = [
-    ...projects.filter((project) => !project.closed).map((project) => project.id),
-    'inbox',
-  ];
-
-  await Promise.all(
-    projectIds.map(async (projectId) => {
-      const tasks = await fetchTasksByFilter(accessToken, {
-        projectIds: [projectId],
-        status: [0],
-      });
-      for (const task of tasks) {
-        merged.set(task.id, task);
-      }
-    })
-  );
-
-  return Array.from(merged.values());
-}
-
 async function fetchCompletedTasksForProjects(
   accessToken: string,
-  projects: TickTickProject[]
+  projects: TickTickProject[],
+  options?: { includeInbox?: boolean }
 ): Promise<TickTickTask[]> {
   const merged = new Map<string, TickTickTask>();
 
   const projectIds = [
     ...projects.filter((project) => !project.closed).map((project) => project.id),
-    'inbox',
+    ...(options?.includeInbox === false ? [] : ['inbox']),
   ];
+
+  if (projectIds.length === 0) {
+    return [];
+  }
 
   await Promise.all(
     projectIds.map(async (projectId) => {
@@ -557,35 +521,51 @@ function mergeTasksById(...taskGroups: TickTickTask[][]): TickTickTask[] {
   return Array.from(merged.values());
 }
 
+/** Global Goal(year) tag filter only — avoids redundant per-project fan-out. */
 async function fetchAllGoalTasks(
   accessToken: string,
-  tag: string,
-  projects: TickTickProject[]
+  tag: string
 ): Promise<TickTickTask[]> {
-  const merged = new Map<string, TickTickTask>();
+  return fetchTasksByTag(accessToken, tag);
+}
 
-  const addTasks = (tasks: TickTickTask[]) => {
-    for (const task of tasks) {
-      if (task.id) {
-        merged.set(task.id, task);
-      }
+function taskNeedsDetailEnrichment(task: TickTickTask): boolean {
+  // /project/{id}/data usually already includes tags; skip detail GETs when present.
+  return !Array.isArray(task.tags);
+}
+
+function taskNeedsChecklistEnrichment(task: TickTickTask): boolean {
+  return task.items === undefined;
+}
+
+async function enrichTasksWithDetails(
+  accessToken: string,
+  tasks: TickTickTask[],
+  concurrency = 8,
+  shouldEnrich: (task: TickTickTask) => boolean = taskNeedsDetailEnrichment
+): Promise<TickTickTask[]> {
+  const needingDetail = tasks.filter(shouldEnrich);
+
+  if (needingDetail.length === 0) {
+    return tasks;
+  }
+
+  const enrichedById = new Map<string, TickTickTask>();
+
+  for (let i = 0; i < needingDetail.length; i += concurrency) {
+    const batch = needingDetail.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map(async (task) => {
+        const detail = await fetchTaskDetail(accessToken, task.projectId, task.id);
+        return detail ? mergeTaskRecord(task, detail) : task;
+      })
+    );
+    for (const task of results) {
+      enrichedById.set(task.id, task);
     }
-  };
+  }
 
-  addTasks(await fetchTasksByTag(accessToken, tag));
-
-  const projectIds = [
-    ...projects.filter((project) => !project.closed).map((project) => project.id),
-    'inbox',
-  ];
-
-  await Promise.all(
-    projectIds.map(async (projectId) => {
-      addTasks(await fetchTasksByTag(accessToken, tag, projectId));
-    })
-  );
-
-  return Array.from(merged.values());
+  return tasks.map((task) => enrichedById.get(task.id) || task);
 }
 
 function startOfDay(d: Date): Date {
@@ -779,11 +759,37 @@ function pendingSinceLabel(due: Date, now: Date): string {
   return `${days}d pending`;
 }
 
+const WEEK_DASHBOARD_TTL_MS = 45_000;
+const weekDashboardCache = new Map<string, { expiresAt: number; data: WeekDashboardPayload }>();
+
+export function invalidateWeekDashboardCache(userId?: string): void {
+  if (userId) {
+    weekDashboardCache.delete(userId);
+    return;
+  }
+  weekDashboardCache.clear();
+}
+
 export async function getWeekDashboard(userId: string): Promise<WeekDashboardPayload> {
+  const cached = weekDashboardCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+
+  const data = await buildWeekDashboard(userId);
+  weekDashboardCache.set(userId, {
+    expiresAt: Date.now() + WEEK_DASHBOARD_TTL_MS,
+    data,
+  });
+  return data;
+}
+
+async function buildWeekDashboard(userId: string): Promise<WeekDashboardPayload> {
   const { accessToken } = await loadUserForTickTick(userId);
   const { projects, tasks } = await fetchAllTasks(accessToken);
 
   const now = new Date();
+  const year = now.getFullYear();
   const todayEnd = endOfDay(now);
   const weekStart = startOfWeekMonday(now);
   const weekEnd = endOfDay(addDays(weekStart, 6));
@@ -893,18 +899,35 @@ export async function getWeekDashboard(userId: string): Promise<WeekDashboardPay
   pending.sort(sortByDue);
   nextWeek.sort(sortByDue);
 
-  const goalTag = `Goal(${now.getFullYear()})`;
-  const [taggedGoalTasks, completedTasks, openFilterTasks] = await Promise.all([
-    fetchAllGoalTasks(accessToken, goalTag, projects),
-    fetchCompletedTasksForProjects(accessToken, projects),
-    fetchOpenTasksForProjects(accessToken, projects),
-  ]);
+  const goalTag = `Goal(${year})`;
+  // Single global tag filter (open + completed in parallel). Skip duplicate open-task
+  // filters — /project/{id}/data already loaded open tasks above.
+  const taggedGoalTasks = await fetchAllGoalTasks(accessToken, goalTag);
 
-  const enrichedTaggedTasks = await enrichTasksWithDetails(accessToken, taggedGoalTasks);
-  let taskPool = mergeTasksById(tasks, completedTasks, openFilterTasks);
+  const openGoalProjectIds = new Set<string>();
+  for (const task of [...tasks, ...taggedGoalTasks]) {
+    if (hasGoalTag(task, year) && task.projectId) {
+      openGoalProjectIds.add(task.projectId);
+    }
+  }
+
+  const goalProjects = projects.filter((project) => openGoalProjectIds.has(project.id));
+  const includeInbox = openGoalProjectIds.has('inbox') || taggedGoalTasks.some((t) => !t.projectId);
+
+  // Only pull completed tasks from lists that actually contain yearly goals
+  const completedTasks =
+    goalProjects.length > 0 || includeInbox
+      ? await fetchCompletedTasksForProjects(accessToken, goalProjects, {
+          includeInbox,
+        })
+      : [];
+
+  let taggedEnriched = await enrichTasksWithDetails(accessToken, taggedGoalTasks);
+
+  let taskPool = mergeTasksById(tasks, completedTasks, taggedEnriched);
 
   const parentIds = new Set(
-    enrichedTaggedTasks
+    taggedEnriched
       .map((task) => task.parentId)
       .filter((parentId): parentId is string => Boolean(parentId))
   );
@@ -913,16 +936,37 @@ export async function getWeekDashboard(userId: string): Promise<WeekDashboardPay
     (task) =>
       Boolean(task.parentId) ||
       parentIds.has(task.id) ||
-      enrichedTaggedTasks.some((tagged) => tagged.parentId === task.id)
+      taggedEnriched.some((tagged) => tagged.parentId === task.id)
   );
 
   const enrichedHierarchyTasks = await enrichTasksWithDetails(
     accessToken,
-    hierarchyCandidates
+    hierarchyCandidates,
+    8,
+    taskNeedsDetailEnrichment
   );
 
-  taskPool = mergeTasksById(taskPool, enrichedTaggedTasks, enrichedHierarchyTasks);
-  const yearlyGoals = buildYearlyGoals(enrichedTaggedTasks, taskPool, now.getFullYear());
+  taskPool = mergeTasksById(taskPool, taggedEnriched, enrichedHierarchyTasks);
+
+  // Checklist progress for leaf goals only when items were omitted from list payloads
+  const leafGoalsMissingItems = taggedEnriched.filter((task) => {
+    if (task.parentId) return false;
+    if (!taskNeedsChecklistEnrichment(task)) return false;
+    const children = taskPool.filter((candidate) => candidate.parentId === task.id);
+    return children.length === 0;
+  });
+
+  if (leafGoalsMissingItems.length > 0) {
+    taggedEnriched = await enrichTasksWithDetails(
+      accessToken,
+      taggedEnriched,
+      8,
+      (task) => leafGoalsMissingItems.some((leaf) => leaf.id === task.id)
+    );
+    taskPool = mergeTasksById(taskPool, taggedEnriched);
+  }
+
+  const yearlyGoals = buildYearlyGoals(taggedEnriched, taskPool, year);
 
   return {
     weekLabel: monthDayLabel(weekStart, weekEnd),
@@ -972,6 +1016,8 @@ export async function createTickTickNote(
     }),
   });
 
+  invalidateWeekDashboardCache(userId);
+
   return toDashboardTask(
     {
       id: created?.id || '',
@@ -1009,6 +1055,8 @@ export async function updateTickTickNote(
     }),
   });
 
+  invalidateWeekDashboardCache(userId);
+
   return toDashboardTask({
     id: taskId,
     projectId,
@@ -1029,4 +1077,5 @@ export async function completeTickTickTask(
     `/project/${encodeURIComponent(projectId)}/task/${encodeURIComponent(taskId)}/complete`,
     { method: 'POST' }
   );
+  invalidateWeekDashboardCache(userId);
 }

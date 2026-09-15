@@ -33,13 +33,15 @@ export function HomeDashboard() {
   const statusQuery = useQuery({
     queryKey: ['ticktick', 'status'],
     queryFn: () => ticktickService.getStatus(),
+    staleTime: 5 * 60_000,
   });
 
   const weekQuery = useQuery({
     queryKey: ['ticktick', 'week-dashboard'],
     queryFn: () => ticktickService.getWeekDashboard(),
     enabled: Boolean(statusQuery.data?.connected),
-    staleTime: 60_000,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
   });
 
   const connectMutation = useMutation({
@@ -95,7 +97,10 @@ export function HomeDashboard() {
         next.delete(task.id);
         return next;
       });
-      queryClient.invalidateQueries({ queryKey: ['ticktick', 'week-dashboard'] });
+      queryClient.invalidateQueries({
+        queryKey: ['ticktick', 'week-dashboard'],
+        refetchType: 'none',
+      });
     },
   });
 
@@ -106,7 +111,10 @@ export function HomeDashboard() {
         if (!old) return old;
         return { ...old, notes: [note, ...old.notes] };
       });
-      queryClient.invalidateQueries({ queryKey: ['ticktick', 'week-dashboard'] });
+      queryClient.invalidateQueries({
+        queryKey: ['ticktick', 'week-dashboard'],
+        refetchType: 'none',
+      });
     },
     onError: (err: Error) => {
       setBanner(err.message || 'Failed to add note');
@@ -124,7 +132,10 @@ export function HomeDashboard() {
           notes: old.notes.map((n) => (n.id === updated.id ? { ...n, ...updated } : n)),
         };
       });
-      queryClient.invalidateQueries({ queryKey: ['ticktick', 'week-dashboard'] });
+      queryClient.invalidateQueries({
+        queryKey: ['ticktick', 'week-dashboard'],
+        refetchType: 'none',
+      });
     },
     onError: (err: Error) => {
       setBanner(err.message || 'Failed to update note');

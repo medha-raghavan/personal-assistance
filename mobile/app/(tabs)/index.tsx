@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,9 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
-  AppState,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ticktickService, TickTickWeekTask } from '../../services/api';
 import { useTheme } from '../../components/ThemeProvider';
@@ -32,31 +30,23 @@ export default function HomeDashboardScreen() {
   const statusQuery = useQuery({
     queryKey: ['ticktick', 'status'],
     queryFn: () => ticktickService.getStatus(),
+    staleTime: 5 * 60_000,
   });
 
   const weekQuery = useQuery({
     queryKey: ['ticktick', 'week-dashboard'],
     queryFn: () => ticktickService.getWeekDashboard(),
     enabled: Boolean(statusQuery.data?.connected),
-    staleTime: 60_000,
+    staleTime: 2 * 60_000,
+    gcTime: 10 * 60_000,
   });
 
-  const refreshOnForeground = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['ticktick'] });
-  }, [queryClient]);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refreshOnForeground();
-    });
-    return () => sub.remove();
-  }, [refreshOnForeground]);
-
-  useFocusEffect(
-    useCallback(() => {
-      refreshOnForeground();
-    }, [refreshOnForeground])
-  );
+  const refreshDashboard = useCallback(async () => {
+    await Promise.all([
+      statusQuery.refetch(),
+      statusQuery.data?.connected ? weekQuery.refetch() : Promise.resolve(),
+    ]);
+  }, [statusQuery, weekQuery]);
 
   const connectMutation = useMutation({
     mutationFn: () => ticktickService.getAuthUrl('mobile'),
@@ -109,7 +99,11 @@ export default function HomeDashboardScreen() {
         next.delete(task.id);
         return next;
       });
-      queryClient.invalidateQueries({ queryKey: ['ticktick', 'week-dashboard'] });
+      // Optimistic update already applied; avoid an immediate full TickTick refetch.
+      queryClient.invalidateQueries({
+        queryKey: ['ticktick', 'week-dashboard'],
+        refetchType: 'none',
+      });
     },
   });
 
@@ -120,7 +114,10 @@ export default function HomeDashboardScreen() {
         if (!old) return old;
         return { ...old, notes: [note, ...old.notes] };
       });
-      queryClient.invalidateQueries({ queryKey: ['ticktick', 'week-dashboard'] });
+      queryClient.invalidateQueries({
+        queryKey: ['ticktick', 'week-dashboard'],
+        refetchType: 'none',
+      });
     },
     onError: (err: any) => {
       Alert.alert('Error', err.response?.data?.error?.message || 'Failed to add note');
@@ -138,7 +135,10 @@ export default function HomeDashboardScreen() {
           notes: old.notes.map((n) => (n.id === updated.id ? updated : n)),
         };
       });
-      queryClient.invalidateQueries({ queryKey: ['ticktick', 'week-dashboard'] });
+      queryClient.invalidateQueries({
+        queryKey: ['ticktick', 'week-dashboard'],
+        refetchType: 'none',
+      });
     },
     onError: (err: any) => {
       Alert.alert('Error', err.response?.data?.error?.message || 'Failed to update note');
@@ -246,7 +246,7 @@ export default function HomeDashboardScreen() {
     );
   }
 
-  if (weekQuery.isLoading || !weekQuery.data) {
+  if (weekQuery.isLoading && !weekQuery.data) {
     return (
       <View style={{ flex: 1, backgroundColor: shellBg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color="#7C8CF0" />
@@ -255,7 +255,7 @@ export default function HomeDashboardScreen() {
     );
   }
 
-  if (weekQuery.isError) {
+  if (weekQuery.isError && !weekQuery.data) {
     return (
       <View style={{ flex: 1, backgroundColor: shellBg, padding: 24, justifyContent: 'center', alignItems: 'center' }}>
         <Ionicons name="alert-circle-outline" size={40} color="#F0654A" />
@@ -290,6 +290,14 @@ export default function HomeDashboardScreen() {
     );
   }
 
+  if (!weekQuery.data) {
+    return (
+      <View style={{ flex: 1, backgroundColor: shellBg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color="#7C8CF0" />
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: shellBg }}
@@ -297,7 +305,7 @@ export default function HomeDashboardScreen() {
       refreshControl={
         <RefreshControl
           refreshing={weekQuery.isFetching && !weekQuery.isLoading}
-          onRefresh={() => weekQuery.refetch()}
+          onRefresh={refreshDashboard}
           tintColor="#7C8CF0"
         />
       }
@@ -320,7 +328,7 @@ export default function HomeDashboardScreen() {
       <WeekPlanner
         data={weekQuery.data}
         syncing={weekQuery.isFetching}
-        onRefresh={() => weekQuery.refetch()}
+        onRefresh={refreshDashboard}
         onDisconnect={handleDisconnect}
         onCompleteTask={(task) => completeMutation.mutate(task)}
         onAddNote={async (title) => {
