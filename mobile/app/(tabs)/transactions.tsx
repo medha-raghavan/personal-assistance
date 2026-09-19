@@ -38,6 +38,26 @@ function toLocalDateString(date: Date): string {
   ).padStart(2, '0')}`;
 }
 
+function getCurrentMonthRange(): { startDate: string; endDate: string } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return {
+    startDate: toLocalDateString(start),
+    endDate: toLocalDateString(end),
+  };
+}
+
+function createDefaultTransactionFilters(): TransactionFilters {
+  return {
+    page: 1,
+    limit: 50,
+    sortBy: 'transactionDate',
+    sortOrder: 'desc',
+    ...getCurrentMonthRange(),
+  };
+}
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -109,12 +129,7 @@ export default function TransactionsScreen() {
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
-  const [filters, setFilters] = useState<TransactionFilters>({
-    page: 1,
-    limit: 50,
-    sortBy: 'transactionDate',
-    sortOrder: 'desc',
-  });
+  const [filters, setFilters] = useState<TransactionFilters>(() => createDefaultTransactionFilters());
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -166,19 +181,23 @@ export default function TransactionsScreen() {
   const calendarTransactions = calendarData?.transactions || [];
 
   const transactions = data?.transactions || [];
-  const rawTotals = data?.totals || { totalCredit: 0, totalDebit: 0, netTotal: 0 };
+  const activeTotalsSource =
+    viewMode === 'calendar' ? calendarData ?? data : data;
+  const rawTotals = activeTotalsSource?.totals || { totalCredit: 0, totalDebit: 0, netTotal: 0 };
   const totals = {
     income: rawTotals.totalCredit || 0,
     expense: rawTotals.totalDebit || 0,
     net: rawTotals.netTotal || 0,
   };
-  const pagination = data?.pagination || { total: 0, page: 1, limit: 50, pages: 1 };
+  const pagination =
+    activeTotalsSource?.pagination || { total: 0, page: 1, limit: 50, pages: 1 };
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => transactionService.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions-calendar'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['sections'] });
@@ -194,6 +213,7 @@ export default function TransactionsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['goals'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions-calendar'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['sections'] });
@@ -243,12 +263,7 @@ export default function TransactionsScreen() {
   }, [searchQuery]);
 
   const clearFilters = () => {
-    setFilters({
-      page: 1,
-      limit: 50,
-      sortBy: 'transactionDate',
-      sortOrder: 'desc',
-    });
+    setFilters(createDefaultTransactionFilters());
     setSearchQuery('');
     setFilterTags('');
     setShowFilters(false);
@@ -279,12 +294,31 @@ export default function TransactionsScreen() {
     setSelectionMode(false);
   };
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => transactionService.delete(id)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions-calendar'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['sections'] });
+      setSelectedIds(new Set());
+      setSelectionMode(false);
+      Alert.alert('Success', 'Selected transactions deleted');
+    },
+    onError: (error: any) => {
+      Alert.alert('Error', error.response?.data?.error?.message || 'Failed to delete transactions');
+    },
+  });
+
   const toggleAllSelection = () => {
     if (selectedIds.size === transactions.length) {
       clearSelection();
     } else {
       setSelectionMode(true);
-      setSelectedIds(new Set(transactions.map((tx) => tx._id)));
+      setSelectedIds(new Set(transactions.map((tx: Transaction) => tx._id)));
     }
   };
 
@@ -314,19 +348,47 @@ export default function TransactionsScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => deleteMutation.mutate(tx._id),
+          onPress: () => {
+            setShowEditModal(false);
+            setEditingTx(null);
+            deleteMutation.mutate(tx._id);
+          },
         },
       ]
     );
   };
 
+  const handleBulkDelete = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    Alert.alert(
+      'Delete Transactions',
+      `Delete ${ids.length} selected transaction${ids.length === 1 ? '' : 's'}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => bulkDeleteMutation.mutate(ids),
+        },
+      ]
+    );
+  };
+
+  const currentMonthRange = getCurrentMonthRange();
+  const isDefaultMonthRange =
+    filters.startDate === currentMonthRange.startDate &&
+    filters.endDate === currentMonthRange.endDate;
+  const hasCustomDateFilter =
+    (!!filters.startDate || !!filters.endDate) && !isDefaultMonthRange;
   const hasActiveFilters = !!(
     filters.keyword ||
     filters.sectionId ||
     filters.categoryId ||
     filters.type ||
-    filters.startDate ||
-    filters.endDate ||
+    hasCustomDateFilter ||
+    (!filters.startDate && !filters.endDate) ||
     filters.minAmount ||
     filters.maxAmount ||
     filters.tags?.length ||
@@ -396,6 +458,15 @@ export default function TransactionsScreen() {
           {item.type === 'credit' ? '+' : '-'}
           {formatCurrency(item.amount)}
         </Text>
+        {!selectionMode && (
+          <TouchableOpacity
+            className="ml-2 p-1"
+            onPress={() => handleDelete(item)}
+            hitSlop={8}
+          >
+            <Ionicons name="trash-outline" size={18} color="#ef4444" />
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
     );
@@ -411,7 +482,13 @@ export default function TransactionsScreen() {
         <View className="flex-row items-end justify-between gap-3 mb-3">
           <View className="flex-1">
             <Text style={{ color: colors.textSecondary }} className="text-sm">
-              {(pagination.totalCount ?? pagination.total ?? 0)} transaction{(pagination.totalCount ?? pagination.total ?? 0) === 1 ? '' : 's'} found
+              {(pagination.totalCount ?? pagination.total ?? 0)} transaction
+              {(pagination.totalCount ?? pagination.total ?? 0) === 1 ? '' : 's'}
+              {viewMode === 'calendar'
+                ? ` in ${calendarMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`
+                : isDefaultMonthRange
+                  ? ' this month'
+                  : ' found'}
             </Text>
           </View>
           <View className="flex-row gap-2">
@@ -474,14 +551,30 @@ export default function TransactionsScreen() {
               <Text className="text-sky-600 text-sm">Clear</Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            className="bg-sky-500 px-3 py-2 rounded-lg flex-row items-center"
-            onPress={() => setShowBulkEditModal(true)}
-            disabled={selectedIds.size === 0}
-          >
-            <Ionicons name="create-outline" size={16} color="white" />
-            <Text className="text-white font-medium ml-1">Bulk Edit</Text>
-          </TouchableOpacity>
+          <View className="flex-row items-center gap-2">
+            <TouchableOpacity
+              className="bg-red-500 px-3 py-2 rounded-lg flex-row items-center"
+              onPress={handleBulkDelete}
+              disabled={selectedIds.size === 0 || bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={16} color="white" />
+                  <Text className="text-white font-medium ml-1">Delete</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="bg-sky-500 px-3 py-2 rounded-lg flex-row items-center"
+              onPress={() => setShowBulkEditModal(true)}
+              disabled={selectedIds.size === 0}
+            >
+              <Ionicons name="create-outline" size={16} color="white" />
+              <Text className="text-white font-medium ml-1">Bulk Edit</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -826,9 +919,15 @@ export default function TransactionsScreen() {
                 {(filters.startDate || filters.endDate) && (
                   <TouchableOpacity
                     className="mt-2"
-                    onPress={() => setFilters((prev) => ({ ...prev, startDate: undefined, endDate: undefined }))}
+                    onPress={() =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        ...getCurrentMonthRange(),
+                        page: 1,
+                      }))
+                    }
                   >
-                    <Text className="text-sky-500 text-sm">Clear dates</Text>
+                    <Text className="text-sky-500 text-sm">Reset to current month</Text>
                   </TouchableOpacity>
                 )}
                 {showStartDatePicker && (
@@ -986,7 +1085,13 @@ export default function TransactionsScreen() {
             updateMutation.mutate({ id: editingTx._id, data });
           }
         }}
+        onDelete={() => {
+          if (editingTx) {
+            handleDelete(editingTx);
+          }
+        }}
         isLoading={updateMutation.isPending}
+        isDeleting={deleteMutation.isPending}
       />
     </View>
   );
@@ -1935,7 +2040,9 @@ function EditTransactionModal({
   trips,
   onClose,
   onSave,
+  onDelete,
   isLoading,
+  isDeleting,
 }: {
   visible: boolean;
   transaction: Transaction | null;
@@ -1944,7 +2051,9 @@ function EditTransactionModal({
   trips: Trip[];
   onClose: () => void;
   onSave: (data: any) => void;
+  onDelete: () => void;
   isLoading: boolean;
+  isDeleting?: boolean;
 }) {
   const [formData, setFormData] = useState({
     transactionDate: new Date(),
@@ -2331,16 +2440,37 @@ function EditTransactionModal({
             </View>
 
             <TouchableOpacity
-              className={`py-4 rounded-xl items-center mb-6 ${
+              className={`py-4 rounded-xl items-center mb-3 ${
                 isLoading ? 'bg-sky-300' : 'bg-sky-500'
               }`}
               onPress={handleSave}
-              disabled={isLoading}
+              disabled={isLoading || isDeleting}
             >
               {isLoading ? (
                 <ActivityIndicator color="white" />
               ) : (
                 <Text className="text-white font-semibold text-lg">Save Changes</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="py-4 rounded-xl items-center mb-6 flex-row justify-center"
+              style={{
+                backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                borderWidth: 1,
+                borderColor: '#ef4444',
+                opacity: isDeleting ? 0.6 : 1,
+              }}
+              onPress={onDelete}
+              disabled={isLoading || isDeleting}
+            >
+              {isDeleting ? (
+                <ActivityIndicator color="#ef4444" />
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                  <Text className="text-red-500 font-semibold text-lg ml-2">Delete Transaction</Text>
+                </>
               )}
             </TouchableOpacity>
           </ScrollView>

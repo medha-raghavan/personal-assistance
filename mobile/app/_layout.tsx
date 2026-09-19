@@ -15,6 +15,7 @@ import {
   getPaymentIdFromNotificationResponse,
   requestPaymentNotificationPermission,
 } from '../services/paymentNotifications';
+import { startOfflineQueueSync } from '../services/offlineQueue';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -95,6 +96,7 @@ function RootLayoutContent() {
           console.log('SMS listener initialized successfully');
         }
       });
+      startOfflineQueueSync();
       refreshDashboardWidget().catch(() => undefined);
     } else {
       stopSmsListener();

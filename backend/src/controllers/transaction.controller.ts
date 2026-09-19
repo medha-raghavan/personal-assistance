@@ -39,8 +39,17 @@ export async function getTransactions(
 
     if (startDate || endDate) {
       filter.transactionDate = {};
-      if (startDate) (filter.transactionDate as Record<string, Date>).$gte = new Date(startDate as string);
-      if (endDate) (filter.transactionDate as Record<string, Date>).$lte = new Date(endDate as string);
+      if (startDate) {
+        (filter.transactionDate as Record<string, Date>).$gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        const end = new Date(endDate as string);
+        // Inclusive end-of-day so YYYY-MM-DD month filters cover the full last day
+        if (!Number.isNaN(end.getTime())) {
+          end.setUTCHours(23, 59, 59, 999);
+        }
+        (filter.transactionDate as Record<string, Date>).$lte = end;
+      }
     }
 
     if (minAmount || maxAmount) {

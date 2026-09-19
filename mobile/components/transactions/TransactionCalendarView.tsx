@@ -377,12 +377,26 @@ export function TransactionCalendarView({
                           )}
                         </View>
                       </View>
-                      <Text
-                        className={`font-bold ${transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}
-                      >
-                        {transaction.type === 'credit' ? '+' : '-'}
-                        {formatCurrency(transaction.amount)}
-                      </Text>
+                      <View className="items-end">
+                        <Text
+                          className={`font-bold ${transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}
+                        >
+                          {transaction.type === 'credit' ? '+' : '-'}
+                          {formatCurrency(transaction.amount)}
+                        </Text>
+                        <TouchableOpacity
+                          className="mt-2 p-1"
+                          onPress={() =>
+                            Alert.alert('Delete Transaction', 'Are you sure you want to delete this transaction?', [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Delete', style: 'destructive', onPress: () => onDelete(transaction) },
+                            ])
+                          }
+                          hitSlop={8}
+                        >
+                          <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </TouchableOpacity>
                 ))}

@@ -59,6 +59,7 @@ eas build -p android --profile preview
 
 ### Major Banks
 - **HDFC**: Rs.500 debited from A/c XX1234 to Amazon on 01-04-26
+- **HDFC UPI (multiline)**: Sent Rs.150.00 / From HDFC Bank A/C *1014 / To 7 Eleven… / On 11/09/26
 - **ICICI**: Your A/c XXXX is debited for Rs.500 on 01-Apr for Swiggy
 - **SBI**: Rs.1000 debited from A/c XX5678 to Flipkart
 - **Axis**: INR 750 spent on A/c XX9012 at BigBasket
