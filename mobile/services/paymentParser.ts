@@ -10,6 +10,26 @@ export interface ParsedPayment {
   rawMessage: string;
 }
 
+function parseSmsDate(value: string): Date {
+  const parts = value.split(/[\/\-]/).map((part) => parseInt(part, 10));
+  if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+    return new Date();
+  }
+  const [day, month, yearRaw] = parts;
+  const year = yearRaw < 100 ? 2000 + yearRaw : yearRaw;
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function normalizeMerchant(name: string): string {
+  return name
+    .replace(/^(to|from|at|for)\s+/i, '')
+    .replace(/\s+(on|via|ref|upi|neft|imps|through).*$/i, '')
+    .replace(/[*@]/g, '')
+    .trim()
+    .substring(0, 50);
+}
+
 const BANK_PATTERNS: {
   name: string;
   patterns: RegExp[];
@@ -18,6 +38,9 @@ const BANK_PATTERNS: {
   {
     name: 'HDFC',
     patterns: [
+      // Multiline UPI: Sent Rs.150.00\nFrom HDFC Bank A/C *1014\nTo Merchant\nOn 11/09/26
+      /Sent\s+Rs\.?\s*([\d,]+(?:\.\d{2})?)[\s\S]*?From\s+HDFC[\s\S]*?A\/C\s*[*xX]*(\d{4})[\s\S]*?To\s+([^\n\r]+)/i,
+      /Paid\s+Rs\.?\s*([\d,]+(?:\.\d{2})?)[\s\S]*?From\s+HDFC[\s\S]*?A\/C\s*[*xX]*(\d{4})[\s\S]*?To\s+([^\n\r]+)/i,
       /Rs\.?\s*([\d,]+(?:\.\d{2})?)\s*(?:has been\s*)?debited\s*(?:from\s*(?:A\/c|account)\s*[*xX]*(\d{4}))?.*?(?:to\s+|for\s+|at\s+)([^.]+)/i,
       /INR\s*([\d,]+(?:\.\d{2})?)\s*(?:debited|spent)\s*(?:from\s*(?:A\/c|account)\s*[*xX]*(\d{4}))?.*?(?:to\s+|for\s+|at\s+)([^.]+)/i,
       /Rs\.?\s*([\d,]+(?:\.\d{2})?)\s*credited\s*to\s*(?:A\/c|account)\s*[*xX]*(\d{4})/i,
@@ -25,12 +48,17 @@ const BANK_PATTERNS: {
     extract: (match, message) => {
       const amount = parseFloat(match[1].replace(/,/g, ''));
       const isCredit = /credited/i.test(message);
+      const merchant = normalizeMerchant(match[3]?.trim() || 'Unknown');
+      const refMatch = message.match(/Ref(?:erence)?(?:\s*No)?\.?\s*:?\s*(\d+)/i);
+      const dateMatch = message.match(/On\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
       return {
         amount,
         accountLast4: match[2],
-        merchant: match[3]?.trim() || 'Unknown',
+        merchant: merchant || 'Unknown',
         type: isCredit ? 'credit' : 'debit',
         bank: 'HDFC',
+        referenceNumber: refMatch?.[1],
+        ...(dateMatch?.[1] ? { date: parseSmsDate(dateMatch[1]) } : {}),
       };
     },
   },
@@ -177,10 +205,11 @@ export function parsePaymentSMS(message: string, sender?: string): ParsedPayment
     return null;
   }
 
-  const isPaymentMessage = 
+  const isPaymentMessage =
     lowerMessage.includes('debited') ||
     lowerMessage.includes('credited') ||
     lowerMessage.includes('paid') ||
+    lowerMessage.includes('sent') ||
     lowerMessage.includes('spent') ||
     lowerMessage.includes('withdrawn') ||
     lowerMessage.includes('transferred') ||
@@ -236,8 +265,9 @@ export function parsePaymentSMS(message: string, sender?: string): ParsedPayment
     result.type = /credited|received|got/i.test(message) ? 'credit' : 'debit';
   }
 
-  if (!result.merchant || result.merchant === 'Unknown') {
+  if (!result.merchant || result.merchant === 'Unknown' || /^from$/i.test(result.merchant)) {
     const merchantPatterns = [
+      /(?:^|\n)\s*To\s+([^\n\r]+)/i,
       /(?:to|at|for)\s+([A-Z][A-Za-z0-9\s]+?)(?:\s+on|\s+via|\s+ref|\.|\s*$)/i,
       /(?:from)\s+([A-Z][A-Za-z0-9\s]+?)(?:\s+on|\s+via|\s+ref|\.|\s*$)/i,
     ];
@@ -245,8 +275,11 @@ export function parsePaymentSMS(message: string, sender?: string): ParsedPayment
     for (const pattern of merchantPatterns) {
       const match = message.match(pattern);
       if (match && match[1]) {
-        result.merchant = match[1].trim().substring(0, 50);
-        break;
+        const cleaned = normalizeMerchant(match[1]);
+        if (cleaned && !/^hdfc/i.test(cleaned)) {
+          result.merchant = cleaned.substring(0, 50);
+          break;
+        }
       }
     }
   }
@@ -290,10 +323,5 @@ export function isPaymentSender(sender: string): boolean {
 }
 
 export function cleanMerchantName(name: string): string {
-  return name
-    .replace(/^(to|from|at|for)\s+/i, '')
-    .replace(/\s+(on|via|ref|upi|neft|imps|through).*$/i, '')
-    .replace(/[*@]/g, '')
-    .trim()
-    .substring(0, 50);
+  return normalizeMerchant(name);
 }

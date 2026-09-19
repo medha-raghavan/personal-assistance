@@ -236,7 +236,14 @@ export const dashboardService = {
 export const sectionService = {
   async getAll() {
     const response = await api.get('/sections');
-    return response.data.data;
+    const data = response.data.data;
+    try {
+      const { cacheSections } = require('./lookupCache');
+      await cacheSections(data || []);
+    } catch {
+      // non-fatal
+    }
+    return data;
   },
 
   async create(data: {
@@ -273,7 +280,14 @@ export const sectionService = {
 export const categoryService = {
   async getAll() {
     const response = await api.get('/categories');
-    return response.data.data;
+    const data = response.data.data;
+    try {
+      const { cacheCategories } = require('./lookupCache');
+      await cacheCategories(data || []);
+    } catch {
+      // non-fatal
+    }
+    return data;
   },
 
   async create(data: { name: string; color?: string }) {
