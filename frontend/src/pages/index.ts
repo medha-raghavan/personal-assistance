@@ -9,4 +9,5 @@ export { Trips } from './Trips';
 export { TripDetails } from './TripDetails';
 export { Tax } from './Tax';
 export { Categories } from './Categories';
+export { Goals } from './Goals';
 export { WhatsApp } from './WhatsApp';

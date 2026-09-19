@@ -319,6 +319,96 @@ export interface TaxCalculation {
   potentialSavings: number;
 }
 
+export type GoalType = 'goal' | 'loan' | 'sip';
+
+export interface GoalDetailsGoal {
+  targetAmount: number;
+  targetDate?: string | null;
+  typicalMonthlyAmount?: number | null;
+}
+
+export interface GoalDetailsLoan {
+  principal: number;
+  annualRate: number;
+  tenureMonths: number;
+  startDate: string;
+}
+
+export interface GoalDetailsSip {
+  monthlyAmount: number;
+  annualRate: number;
+  tenureMonths?: number | null;
+  startDate: string;
+}
+
+export type GoalDetails = GoalDetailsGoal | GoalDetailsLoan | GoalDetailsSip;
+
+export interface GoalProgress {
+  utilized?: number;
+  target?: number;
+  principalRepaid?: number;
+  principal?: number;
+  invested?: number;
+  expectedTotal?: number;
+  remaining?: number;
+  progressPercent: number | null;
+  summaryAmount: string;
+  isComplete: boolean;
+  isOpenEnded: boolean;
+}
+
+export interface GoalListItem {
+  _id: string;
+  name: string;
+  tag: string;
+  type: GoalType;
+  icon: string;
+  details: GoalDetails;
+  createdAt: string;
+  updatedAt: string;
+  progress: GoalProgress;
+}
+
+export interface GoalHistoryItem {
+  _id: string;
+  date: string;
+  amount: number;
+  type: 'credit' | 'debit';
+  description: string;
+}
+
+export interface GoalProjectedItem {
+  date: string;
+  amount: number;
+  isEstimate: true;
+  label?: string;
+}
+
+export interface GoalDetail extends GoalListItem {
+  stats: Record<string, unknown>;
+  chart: {
+    type: 'loan_outstanding' | 'sip_value' | 'sip_horizons';
+    series?: Array<{ month: number; outstanding?: number; value?: number }>;
+    horizons?: Array<{ years: number; value: number; date: string }>;
+    projectedEndDate?: string | null;
+  } | null;
+  history: GoalHistoryItem[];
+  historyEmpty: boolean;
+  projected: {
+    items: GoalProjectedItem[];
+    moreCount: number;
+    untilDate: string | null;
+  };
+}
+
+export interface CreateGoalPayload {
+  name: string;
+  type: GoalType;
+  tag?: string;
+  icon?: string;
+  details: Record<string, unknown>;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data: T;

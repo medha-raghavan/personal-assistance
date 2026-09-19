@@ -929,4 +929,101 @@ export const ticktickService = {
   },
 };
 
+export type GoalType = 'goal' | 'loan' | 'sip';
+
+export interface GoalProgress {
+  utilized?: number;
+  target?: number;
+  principalRepaid?: number;
+  principal?: number;
+  invested?: number;
+  expectedTotal?: number;
+  remaining?: number;
+  progressPercent: number | null;
+  summaryAmount: string;
+  isComplete: boolean;
+  isOpenEnded: boolean;
+}
+
+export interface GoalListItem {
+  _id: string;
+  name: string;
+  tag: string;
+  type: GoalType;
+  icon: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  progress: GoalProgress;
+}
+
+export interface GoalHistoryItem {
+  _id: string;
+  date: string;
+  amount: number;
+  type: 'credit' | 'debit';
+  description: string;
+}
+
+export interface GoalProjectedItem {
+  date: string;
+  amount: number;
+  isEstimate: true;
+  label?: string;
+}
+
+export interface GoalDetail extends GoalListItem {
+  stats: Record<string, unknown>;
+  chart: {
+    type: 'loan_outstanding' | 'sip_value' | 'sip_horizons';
+    series?: Array<{ month: number; outstanding?: number; value?: number }>;
+    horizons?: Array<{ years: number; value: number; date: string }>;
+    projectedEndDate?: string | null;
+  } | null;
+  history: GoalHistoryItem[];
+  historyEmpty: boolean;
+  projected: {
+    items: GoalProjectedItem[];
+    moreCount: number;
+    untilDate: string | null;
+  };
+}
+
+export const goalService = {
+  async getAll(): Promise<GoalListItem[]> {
+    const response = await api.get('/goals');
+    return response.data.data;
+  },
+
+  async getById(id: string): Promise<GoalDetail> {
+    const response = await api.get(`/goals/${id}`);
+    return response.data.data;
+  },
+
+  async create(data: {
+    name: string;
+    type: GoalType;
+    tag?: string;
+    icon?: string;
+    details: Record<string, unknown>;
+  }): Promise<GoalListItem> {
+    const response = await api.post('/goals', data);
+    return response.data.data;
+  },
+
+  async update(id: string, data: Partial<{
+    name: string;
+    tag: string;
+    icon: string;
+    details: Record<string, unknown>;
+  }>): Promise<GoalListItem> {
+    const response = await api.patch(`/goals/${id}`, data);
+    return response.data.data;
+  },
+
+  async delete(id: string): Promise<void> {
+    await api.delete(`/goals/${id}`);
+  },
+};
+
 export default api;
