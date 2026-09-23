@@ -14,6 +14,7 @@ import {
   MessageCircle,
   ChevronDown,
   Landmark,
+  Target,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
@@ -46,9 +47,10 @@ const financePaths = [
   '/finances',
   '/transactions',
   '/sections',
-  '/categories',
+  '/goals',
   '/trips',
   '/tax',
+  '/categories',
   '/upload',
 ];
 
@@ -63,9 +65,10 @@ const navItems: NavItem[] = [
       { path: '/finances', icon: LayoutDashboard, label: 'Dashboard' },
       { path: '/transactions', icon: ArrowLeftRight, label: 'Transactions' },
       { path: '/sections', icon: Layers, label: 'Sections' },
-      { path: '/categories', icon: Tag, label: 'Categories' },
+      { path: '/goals', icon: Target, label: 'Goals' },
       { path: '/trips', icon: Plane, label: 'Trips' },
       { path: '/tax', icon: Calculator, label: 'Tax' },
+      { path: '/categories', icon: Tag, label: 'Categories' },
     ],
   },
   { type: 'link', path: '/whatsapp', icon: MessageCircle, label: 'WhatsApp' },

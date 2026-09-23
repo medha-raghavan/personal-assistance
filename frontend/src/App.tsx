@@ -14,6 +14,7 @@ import {
   TripDetails,
   Tax,
   Categories,
+  Goals,
   WhatsApp,
 } from './pages';
 
@@ -86,6 +87,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Sections />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/goals"
+          element={
+            <ProtectedRoute>
+              <Goals />
             </ProtectedRoute>
           }
         />
