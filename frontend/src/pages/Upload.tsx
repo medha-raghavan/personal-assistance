@@ -192,7 +192,7 @@ export function Upload() {
           </div>
         </div>
         
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Card>
             <p className="text-sm text-gray-400">Total Found</p>
             <p className="text-2xl font-bold text-white">{preview.totalCount}</p>
@@ -205,7 +205,21 @@ export function Upload() {
             <p className="text-sm text-gray-400">Duplicates (Auto-skipped)</p>
             <p className="text-2xl font-bold text-yellow-400">{preview.duplicateCount}</p>
           </Card>
+          <Card>
+            <p className="text-sm text-gray-400">Review (date + amount match)</p>
+            <p className="text-2xl font-bold text-orange-400">
+              {preview.possibleDuplicateCount ??
+                editableTransactions.filter((t) => t.isPossibleDuplicate).length}
+            </p>
+          </Card>
         </div>
+
+        {(preview.possibleDuplicateCount ?? editableTransactions.some((t) => t.isPossibleDuplicate)) ? (
+          <p className="text-sm text-orange-300/90">
+            Orange rows match an existing transaction on the same date, account, and amount (often from SMS).
+            Verify and uncheck any you already recorded.
+          </p>
+        ) : null}
         
         <Card padding="none">
           <div className="max-h-[500px] overflow-y-auto">
@@ -245,7 +259,8 @@ export function Upload() {
                     key={index}
                     className={`
                       ${txn.isDuplicate ? 'bg-yellow-900/20 opacity-50' : ''}
-                      ${!txn.isSelected && !txn.isDuplicate ? 'bg-gray-800/50 opacity-60' : ''}
+                      ${!txn.isDuplicate && txn.isPossibleDuplicate ? 'bg-orange-900/30 border-l-4 border-orange-500' : ''}
+                      ${!txn.isSelected && !txn.isDuplicate && !txn.isPossibleDuplicate ? 'bg-gray-800/50 opacity-60' : ''}
                       hover:bg-gray-700/30 transition-colors
                     `}
                   >
@@ -275,6 +290,11 @@ export function Upload() {
                       <span className="block truncate max-w-[250px]" title={txn.description}>
                         {txn.description}
                       </span>
+                      {!txn.isDuplicate && txn.isPossibleDuplicate && (
+                        <span className="mt-1 inline-block text-xs text-orange-400">
+                          Possible match — verify
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {txn.isDuplicate ? (

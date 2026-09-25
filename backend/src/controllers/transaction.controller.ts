@@ -97,7 +97,19 @@ export async function getTransactions(
         .lean(),
       Transaction.countDocuments(filter),
       Transaction.aggregate([
-        { $match: { ...filter, userId: new mongoose.Types.ObjectId(req.userId) } },
+        {
+          $match: {
+            $and: [
+              { ...filter, userId: new mongoose.Types.ObjectId(req.userId) },
+              // Exclude transfers / internal movements from Income, Expense, Net
+              {
+                tags: {
+                  $not: { $elemMatch: { $regex: 'internal', $options: 'i' } },
+                },
+              },
+            ],
+          },
+        },
         {
           $group: {
             _id: null,

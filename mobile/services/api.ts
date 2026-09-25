@@ -662,6 +662,7 @@ export interface UploadPreview {
   sectionName: string;
   totalCount: number;
   duplicateCount: number;
+  possibleDuplicateCount?: number;
   newCount: number;
   transactions: {
     transactionDate: string;
@@ -669,6 +670,7 @@ export interface UploadPreview {
     amount: number;
     type: 'credit' | 'debit';
     isDuplicate: boolean;
+    isPossibleDuplicate?: boolean;
   }[];
 }
 

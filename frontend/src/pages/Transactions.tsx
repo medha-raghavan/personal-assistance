@@ -1578,6 +1578,7 @@ function UploadModal({
   };
 
   const nonDuplicateCount = editableTransactions.filter((t) => !t.isDuplicate).length;
+  const possibleDuplicateCount = editableTransactions.filter((t) => t.isPossibleDuplicate).length;
   const allNonDuplicatesSelected = editableTransactions
     .filter((t) => !t.isDuplicate)
     .every((t) => t.isSelected);
@@ -1601,7 +1602,7 @@ function UploadModal({
       ) : step === 'preview' ? (
         <div className="space-y-4">
           {/* Stats - responsive grid */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
             <div className="bg-gray-700/50 rounded-lg p-2 sm:p-4 text-center">
               <p className="text-xs sm:text-sm text-gray-400">Total</p>
               <p className="text-lg sm:text-2xl font-bold text-white">{editableTransactions.length}</p>
@@ -1614,7 +1615,17 @@ function UploadModal({
               <p className="text-xs sm:text-sm text-gray-400">Duplicates</p>
               <p className="text-lg sm:text-2xl font-bold text-yellow-400">{editableTransactions.length - nonDuplicateCount}</p>
             </div>
+            <div className="bg-gray-700/50 rounded-lg p-2 sm:p-4 text-center">
+              <p className="text-xs sm:text-sm text-gray-400">Review</p>
+              <p className="text-lg sm:text-2xl font-bold text-orange-400">{possibleDuplicateCount}</p>
+            </div>
           </div>
+
+          {possibleDuplicateCount > 0 && (
+            <p className="text-xs sm:text-sm text-orange-300/90">
+              Orange rows match an existing transaction on the same date, account, and amount. Verify and uncheck if already added (e.g. via SMS).
+            </p>
+          )}
 
           {/* Select All Button */}
           <div className="flex items-center justify-between border-b border-gray-700 pb-2">
@@ -1643,7 +1654,10 @@ function UploadModal({
               </thead>
               <tbody className="divide-y divide-gray-700">
                 {editableTransactions.map((txn, index) => (
-                  <tr key={index} className={`${txn.isDuplicate ? 'bg-yellow-900/20 opacity-50' : ''} ${!txn.isSelected && !txn.isDuplicate ? 'opacity-60' : ''} hover:bg-gray-700/30`}>
+                  <tr
+                    key={index}
+                    className={`${txn.isDuplicate ? 'bg-yellow-900/20 opacity-50' : ''} ${!txn.isDuplicate && txn.isPossibleDuplicate ? 'bg-orange-900/30 border-l-4 border-orange-500' : ''} ${!txn.isSelected && !txn.isDuplicate && !txn.isPossibleDuplicate ? 'opacity-60' : ''} hover:bg-gray-700/30`}
+                  >
                     <td className="px-3 py-3">
                       {txn.isDuplicate ? (
                         <AlertCircle className="w-5 h-5 text-yellow-500" title="Duplicate" />
@@ -1658,6 +1672,9 @@ function UploadModal({
                     </td>
                     <td className="px-3 py-3 text-sm text-gray-200">
                       <span className="block truncate max-w-[300px]" title={txn.description}>{txn.description}</span>
+                      {!txn.isDuplicate && txn.isPossibleDuplicate && (
+                        <span className="mt-1 inline-block text-xs text-orange-400">Possible match — verify</span>
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       {!txn.isDuplicate && (
@@ -1686,7 +1703,15 @@ function UploadModal({
               {editableTransactions.map((txn, index) => (
                 <div 
                   key={index} 
-                  className={`p-3 rounded-lg border ${txn.isDuplicate ? 'bg-yellow-900/20 border-yellow-800 opacity-60' : txn.isSelected ? 'bg-gray-700/50 border-primary-600' : 'bg-gray-800 border-gray-700 opacity-60'}`}
+                  className={`p-3 rounded-lg border ${
+                    txn.isDuplicate
+                      ? 'bg-yellow-900/20 border-yellow-800 opacity-60'
+                      : txn.isPossibleDuplicate
+                        ? 'bg-orange-900/30 border-orange-500'
+                        : txn.isSelected
+                          ? 'bg-gray-700/50 border-primary-600'
+                          : 'bg-gray-800 border-gray-700 opacity-60'
+                  }`}
                   onClick={() => !txn.isDuplicate && toggleTransaction(index)}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -1700,9 +1725,12 @@ function UploadModal({
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-200 break-words">{txn.description}</p>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
                           <span className="text-xs text-gray-400">{formatDate(txn.transactionDate, 'short')}</span>
                           {txn.isDuplicate && <Badge size="sm" className="bg-yellow-900 text-yellow-400">Duplicate</Badge>}
+                          {!txn.isDuplicate && txn.isPossibleDuplicate && (
+                            <Badge size="sm" className="bg-orange-900 text-orange-300">Review</Badge>
+                          )}
                         </div>
                       </div>
                     </div>

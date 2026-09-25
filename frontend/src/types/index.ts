@@ -280,6 +280,8 @@ export interface ParsedTransaction {
   categoryName?: string;
   compositeKey: string;
   isDuplicate: boolean;
+  /** Same date + section + amount as an existing txn (e.g. from SMS) */
+  isPossibleDuplicate?: boolean;
   balance?: number;
 }
 
@@ -290,6 +292,7 @@ export interface UploadPreview {
   status: string;
   totalCount: number;
   duplicateCount: number;
+  possibleDuplicateCount?: number;
   newCount: number;
   transactions: ParsedTransaction[];
 }

@@ -13,6 +13,20 @@ import { HDFCXLSParser } from '../services/parsers/hdfc-xls.parser.js';
 import { ICICIParser } from '../services/parsers/icici.parser.js';
 import { config } from '../config/index.js';
 
+function toLocalDayKey(date: Date | string): string {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function amountKey(amount: number): string {
+  return Number(amount).toFixed(2);
+}
+
+function softMatchKey(date: Date | string, amount: number): string {
+  return `${toLocalDayKey(date)}_${amountKey(amount)}`;
+}
+
 async function matchCategoryForDescription(userId: string, description: string): Promise<string | null> {
   let categories = await Category.find({ userId });
   
@@ -103,12 +117,36 @@ export async function uploadStatement(
     }
 
     const compositeKeys = parseResult.transactions.map(t => t.compositeKey);
-    const existingTransactions = await Transaction.find({
+    const existingByKey = await Transaction.find({
       userId: req.userId,
       compositeKey: { $in: compositeKeys },
     }).select('compositeKey');
 
-    const existingKeys = new Set(existingTransactions.map(t => t.compositeKey));
+    const existingKeys = new Set(existingByKey.map(t => t.compositeKey));
+
+    // Soft matches: same calendar day + amount in this section (e.g. SMS vs statement narration)
+    const parsedDates = parseResult.transactions
+      .map((t) => new Date(t.transactionDate))
+      .filter((d) => !Number.isNaN(d.getTime()));
+    const softMatchKeys = new Set<string>();
+    if (parsedDates.length > 0) {
+      const minDate = new Date(Math.min(...parsedDates.map((d) => d.getTime())));
+      const maxDate = new Date(Math.max(...parsedDates.map((d) => d.getTime())));
+      minDate.setHours(0, 0, 0, 0);
+      minDate.setDate(minDate.getDate() - 1);
+      maxDate.setHours(23, 59, 59, 999);
+      maxDate.setDate(maxDate.getDate() + 1);
+
+      const sectionCandidates = await Transaction.find({
+        userId: req.userId,
+        sectionId: uploadSession.sectionId,
+        transactionDate: { $gte: minDate, $lte: maxDate },
+      }).select('transactionDate amount');
+
+      for (const existing of sectionCandidates) {
+        softMatchKeys.add(softMatchKey(existing.transactionDate, existing.amount));
+      }
+    }
 
     let categories = await Category.find({ userId: req.userId });
     if (categories.length === 0) {
@@ -140,11 +178,16 @@ export async function uploadStatement(
       if (matchedKeyword && !tags.includes(matchedKeyword)) {
         tags.push(matchedKeyword);
       }
+
+      const isDuplicate = existingKeys.has(t.compositeKey);
+      const isPossibleDuplicate =
+        !isDuplicate && softMatchKeys.has(softMatchKey(t.transactionDate, t.amount));
       
       return {
         ...t,
         tags,
-        isDuplicate: existingKeys.has(t.compositeKey),
+        isDuplicate,
+        isPossibleDuplicate,
         categoryId: matchedCategory?._id.toString(),
         categoryName: matchedCategory?.name,
       };
@@ -161,6 +204,8 @@ export async function uploadStatement(
     uploadSession.status = 'previewing';
     await uploadSession.save();
 
+    const possibleDuplicateCount = transactions.filter(t => t.isPossibleDuplicate).length;
+
     res.json({
       success: true,
       data: {
@@ -168,6 +213,7 @@ export async function uploadStatement(
         fileName: file.originalname,
         totalCount: uploadSession.totalCount,
         duplicateCount: uploadSession.duplicateCount,
+        possibleDuplicateCount,
         newCount: uploadSession.newCount,
         parseErrors: parseResult.errors,
         transactions,
@@ -219,6 +265,9 @@ export async function getUploadPreview(
         status: session.status,
         totalCount: session.totalCount,
         duplicateCount: session.duplicateCount,
+        possibleDuplicateCount: transactions.filter(
+          (t: IParsedTransaction) => t.isPossibleDuplicate
+        ).length,
         newCount: session.newCount,
         transactions,
       },

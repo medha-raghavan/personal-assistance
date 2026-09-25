@@ -1565,24 +1565,33 @@ function UploadStatementModal({
                 <Text style={{ color: colors.text }} className="font-medium">
                   {uploadPreview.sectionName}
                 </Text>
-                <View className="flex-row mt-2">
-                  <View className="flex-1">
+                <View className="flex-row mt-2 flex-wrap">
+                  <View className="w-1/4 mb-2">
                     <Text style={{ color: colors.textMuted }} className="text-xs">Total</Text>
                     <Text style={{ color: colors.text }} className="font-semibold">{uploadPreview.totalCount}</Text>
                   </View>
-                  <View className="flex-1">
+                  <View className="w-1/4 mb-2">
                     <Text style={{ color: colors.textMuted }} className="text-xs">New</Text>
                     <Text className="text-green-600 font-semibold">{uploadPreview.newCount}</Text>
                   </View>
-                  <View className="flex-1">
+                  <View className="w-1/4 mb-2">
                     <Text style={{ color: colors.textMuted }} className="text-xs">Duplicates</Text>
-                    <Text className="text-orange-500 font-semibold">{uploadPreview.duplicateCount}</Text>
+                    <Text className="text-yellow-600 font-semibold">{uploadPreview.duplicateCount}</Text>
                   </View>
-                  <View className="flex-1">
-                    <Text style={{ color: colors.textMuted }} className="text-xs">Selected</Text>
-                    <Text style={{ color: colors.primary }} className="font-semibold">{selectedIndices.size}</Text>
+                  <View className="w-1/4 mb-2">
+                    <Text style={{ color: colors.textMuted }} className="text-xs">Review</Text>
+                    <Text className="text-orange-500 font-semibold">
+                      {uploadPreview.possibleDuplicateCount ??
+                        uploadPreview.transactions.filter((t) => t.isPossibleDuplicate).length}
+                    </Text>
                   </View>
                 </View>
+                {(uploadPreview.possibleDuplicateCount ??
+                  uploadPreview.transactions.some((t) => t.isPossibleDuplicate)) ? (
+                  <Text style={{ color: '#ea580c' }} className="text-xs mt-1">
+                    Orange rows match date + amount on this account — verify before importing.
+                  </Text>
+                ) : null}
               </View>
 
               {/* Transaction List */}
@@ -1592,27 +1601,44 @@ function UploadStatementModal({
                 renderItem={({ item, index }) => (
                   <TouchableOpacity
                     className="flex-row items-center p-4 border-b"
-                    style={{ borderBottomColor: colors.border }}
-                    onPress={() => toggleTransaction(index)}
+                    style={{
+                      borderBottomColor: colors.border,
+                      backgroundColor: item.isDuplicate
+                        ? (isDark ? 'rgba(113, 63, 18, 0.25)' : '#fef3c7')
+                        : item.isPossibleDuplicate
+                          ? (isDark ? 'rgba(154, 52, 18, 0.35)' : '#ffedd5')
+                          : 'transparent',
+                    }}
+                    onPress={() => !item.isDuplicate && toggleTransaction(index)}
+                    disabled={item.isDuplicate}
                   >
                     <View className="mr-3">
-                      <Ionicons
-                        name={selectedIndices.has(index) ? 'checkbox' : 'square-outline'}
-                        size={24}
-                        color={selectedIndices.has(index) ? colors.primary : colors.textMuted}
-                      />
+                      {item.isDuplicate ? (
+                        <Ionicons name="alert-circle" size={24} color="#ca8a04" />
+                      ) : (
+                        <Ionicons
+                          name={selectedIndices.has(index) ? 'checkbox' : 'square-outline'}
+                          size={24}
+                          color={selectedIndices.has(index) ? colors.primary : colors.textMuted}
+                        />
+                      )}
                     </View>
                     <View className="flex-1">
                       <Text style={{ color: colors.text }} numberOfLines={1}>
                         {item.description}
                       </Text>
-                      <View className="flex-row items-center mt-1">
+                      <View className="flex-row items-center mt-1 flex-wrap">
                         <Text style={{ color: colors.textMuted }} className="text-xs">
                           {formatDate(item.transactionDate)}
                         </Text>
                         {item.isDuplicate && (
+                          <View className="ml-2 bg-yellow-100 rounded px-2 py-0.5">
+                            <Text className="text-yellow-700 text-xs">Duplicate</Text>
+                          </View>
+                        )}
+                        {!item.isDuplicate && item.isPossibleDuplicate && (
                           <View className="ml-2 bg-orange-100 rounded px-2 py-0.5">
-                            <Text className="text-orange-600 text-xs">Duplicate</Text>
+                            <Text className="text-orange-700 text-xs">Review</Text>
                           </View>
                         )}
                       </View>

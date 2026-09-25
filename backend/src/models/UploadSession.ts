@@ -12,6 +12,8 @@ export interface IParsedTransaction {
   categoryName?: string;
   compositeKey: string;
   isDuplicate: boolean;
+  /** Same date + section + amount as an existing txn (description may differ) */
+  isPossibleDuplicate?: boolean;
   balance?: number;
 }
 
