@@ -218,7 +218,19 @@ export async function updateTransaction(
 ): Promise<void> {
   try {
     const { id } = req.params;
-    const { description, transactionDate, tags, categoryId, tripId, tripSplits, paidByMemberId, paidByMemberName } = req.body;
+    const {
+      description,
+      transactionDate,
+      tags,
+      categoryId,
+      tripId,
+      tripSplits,
+      paidByMemberId,
+      paidByMemberName,
+      amount,
+      type,
+      sectionId,
+    } = req.body;
 
     const existingTransaction = await Transaction.findOne({ _id: id, userId: req.userId });
     if (!existingTransaction) {
@@ -231,6 +243,32 @@ export async function updateTransaction(
     if (description !== undefined) updateSet.description = description;
     if (transactionDate !== undefined) updateSet.transactionDate = new Date(transactionDate);
     if (tags !== undefined) updateSet.tags = tags;
+
+    if (amount !== undefined) {
+      const parsedAmount = typeof amount === 'number' ? amount : parseFloat(amount);
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        throw new ApiError(400, 'Amount must be a positive number');
+      }
+      updateSet.amount = parsedAmount;
+    }
+
+    if (type !== undefined) {
+      if (type !== 'credit' && type !== 'debit') {
+        throw new ApiError(400, 'Type must be credit or debit');
+      }
+      updateSet.type = type;
+    }
+
+    if (sectionId !== undefined) {
+      if (!sectionId) {
+        throw new ApiError(400, 'Section is required');
+      }
+      const newSection = await Section.findOne({ _id: sectionId, userId: req.userId });
+      if (!newSection) {
+        throw new ApiError(404, 'Section not found');
+      }
+      updateSet.sectionId = new mongoose.Types.ObjectId(sectionId);
+    }
     
     if (categoryId !== undefined) {
       if (categoryId) {
@@ -276,6 +314,78 @@ export async function updateTransaction(
         updateSet.paidByMemberName = paidByMemberName;
       } else {
         updateUnset.paidByMemberName = 1;
+      }
+    }
+
+    const oldAmount = existingTransaction.amount;
+    const oldType = existingTransaction.type;
+    const oldSectionId = existingTransaction.sectionId.toString();
+    const newAmount = (updateSet.amount as number | undefined) ?? oldAmount;
+    const newType = (updateSet.type as 'credit' | 'debit' | undefined) ?? oldType;
+    const newSectionId =
+      updateSet.sectionId !== undefined
+        ? (updateSet.sectionId as mongoose.Types.ObjectId).toString()
+        : oldSectionId;
+
+    const balanceAffectingChange =
+      newAmount !== oldAmount || newType !== oldType || newSectionId !== oldSectionId;
+
+    if (balanceAffectingChange) {
+      const reverseBalance = (section: { balance: number }, txType: string, txAmount: number) => {
+        if (txType === 'credit') section.balance -= txAmount;
+        else section.balance += txAmount;
+      };
+      const applyBalance = (section: { balance: number }, txType: string, txAmount: number) => {
+        if (txType === 'credit') section.balance += txAmount;
+        else section.balance -= txAmount;
+      };
+
+      if (newSectionId === oldSectionId) {
+        const section = await Section.findById(oldSectionId);
+        if (section) {
+          reverseBalance(section, oldType, oldAmount);
+          applyBalance(section, newType, newAmount);
+          await section.save();
+        }
+      } else {
+        const [oldSection, newSection] = await Promise.all([
+          Section.findById(oldSectionId),
+          Section.findById(newSectionId),
+        ]);
+        if (oldSection) {
+          reverseBalance(oldSection, oldType, oldAmount);
+          await oldSection.save();
+        }
+        if (newSection) {
+          applyBalance(newSection, newType, newAmount);
+          await newSection.save();
+        }
+      }
+    }
+
+    // Keep composite key in sync when key fields change
+    if (
+      updateSet.amount !== undefined ||
+      updateSet.description !== undefined ||
+      updateSet.transactionDate !== undefined ||
+      updateSet.sectionId !== undefined
+    ) {
+      const sectionForKey = await Section.findById(newSectionId);
+      const nextDate =
+        (updateSet.transactionDate as Date | undefined) ?? existingTransaction.transactionDate;
+      const nextDescription =
+        (updateSet.description as string | undefined) ?? existingTransaction.description;
+      const dateString =
+        nextDate instanceof Date
+          ? nextDate.toISOString().slice(0, 10)
+          : String(nextDate).slice(0, 10);
+      if (sectionForKey) {
+        updateSet.compositeKey = generateCompositeKey(
+          dateString,
+          newAmount,
+          nextDescription,
+          sectionForKey.name
+        );
       }
     }
 

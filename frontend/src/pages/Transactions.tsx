@@ -844,7 +844,7 @@ function TransactionModal({
   
   const updateMutation = useMutation({
     mutationFn: (data: typeof formData) => {
-      const amount = transaction?.amount || parseFloat(data.amount);
+      const amount = parseFloat(data.amount);
       let tripSplits: Array<{ memberId: string; memberName: string; amount: number }> | null = null;
       let paidByMemberId: string | null = null;
       let paidByMemberName: string | null = null;
@@ -870,6 +870,7 @@ function TransactionModal({
       return transactionService.update(transaction!._id, {
         description: data.description,
         transactionDate: data.transactionDate,
+        amount,
         categoryId: data.categoryId || null,
         tripId: data.tripId || null,
         tags: data.tags.split(',').map(t => t.trim()).filter(Boolean),
@@ -882,6 +883,7 @@ function TransactionModal({
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['sections'] });
       queryClient.invalidateQueries({ queryKey: ['trip-balances'] });
       queryClient.invalidateQueries({ queryKey: ['trip-linked-transactions'] });
       onClose();
@@ -891,6 +893,10 @@ function TransactionModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isEditing) {
+      const amount = parseFloat(formData.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return;
+      }
       updateMutation.mutate(formData);
     } else {
       createMutation.mutate(formData);
@@ -955,13 +961,24 @@ function TransactionModal({
         )}
 
         {isEditing && (
-          <Input
-            label="Date"
-            type="date"
-            value={formData.transactionDate}
-            onChange={(e) => setFormData({ ...formData, transactionDate: e.target.value })}
-            required
-          />
+          <>
+            <Input
+              label="Date"
+              type="date"
+              value={formData.transactionDate}
+              onChange={(e) => setFormData({ ...formData, transactionDate: e.target.value })}
+              required
+            />
+            <Input
+              label="Amount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={formData.amount}
+              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+              required
+            />
+          </>
         )}
 
         <div>
@@ -1052,7 +1069,7 @@ function TransactionModal({
             </div>
             {formData.selectedMemberIds.length > 0 && (
               <p className="text-xs text-gray-400">
-                Split equally: {formatCurrency(transaction?.amount ? transaction.amount / formData.selectedMemberIds.length : 0)} each
+                Split equally: {formatCurrency((parseFloat(formData.amount) || 0) / formData.selectedMemberIds.length)} each
               </p>
             )}
 
