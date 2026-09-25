@@ -875,6 +875,8 @@ function TransactionModal({
         description: data.description,
         transactionDate: data.transactionDate,
         amount,
+        type: data.type,
+        sectionId: data.sectionId,
         categoryId: data.categoryId || null,
         tripId: data.tripId || null,
         tags: data.tags.split(',').map(t => t.trim()).filter(Boolean),
@@ -899,6 +901,9 @@ function TransactionModal({
     e.preventDefault();
     if (isEditing) {
       const amount = parseFloat(formData.amount);
+      if (!formData.sectionId) {
+        return;
+      }
       if (!Number.isFinite(amount) || amount <= 0) {
         return;
       }
@@ -911,80 +916,56 @@ function TransactionModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Edit Transaction' : 'Add Transaction'} size="full">
       <form onSubmit={handleSubmit} className="space-y-4">
-        {!isEditing && (
-          <>
-            <Select
-              label="Section"
-              options={[
-                { value: '', label: 'Select section' },
-                ...sections.map((s) => ({ value: s._id, label: s.name })),
-              ]}
-              value={formData.sectionId}
-              onChange={(value) => setFormData({ ...formData, sectionId: value })}
-            />
-            
-            <Input
-              label="Date"
-              type="date"
-              value={formData.transactionDate}
-              onChange={(e) => setFormData({ ...formData, transactionDate: e.target.value })}
-              required
-            />
-            
-            <div className="flex gap-4 sm:gap-6">
-              <label className="flex items-center gap-2 text-sm sm:text-base text-gray-300">
-                <input
-                  type="radio"
-                  name="type"
-                  checked={formData.type === 'debit'}
-                  onChange={() => setFormData({ ...formData, type: 'debit' })}
-                  className="text-primary-600 focus:ring-primary-500 w-4 h-4"
-                />
-                <span>Expense</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm sm:text-base text-gray-300">
-                <input
-                  type="radio"
-                  name="type"
-                  checked={formData.type === 'credit'}
-                  onChange={() => setFormData({ ...formData, type: 'credit' })}
-                  className="text-primary-600 focus:ring-primary-500 w-4 h-4"
-                />
-                <span>Income</span>
-              </label>
-            </div>
-            
-            <Input
-              label="Amount"
-              type="number"
-              step="0.01"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              required
-            />
-          </>
-        )}
+        <Select
+          label="Section"
+          options={[
+            { value: '', label: 'Select section' },
+            ...sections.map((s) => ({ value: s._id, label: s.name })),
+          ]}
+          value={formData.sectionId}
+          onChange={(value) => setFormData({ ...formData, sectionId: value })}
+        />
 
-        {isEditing && (
-          <>
-            <Input
-              label="Date"
-              type="date"
-              value={formData.transactionDate}
-              onChange={(e) => setFormData({ ...formData, transactionDate: e.target.value })}
-              required
+        <Input
+          label="Date"
+          type="date"
+          value={formData.transactionDate}
+          onChange={(e) => setFormData({ ...formData, transactionDate: e.target.value })}
+          required
+        />
+
+        <div className="flex gap-4 sm:gap-6">
+          <label className="flex items-center gap-2 text-sm sm:text-base text-gray-300">
+            <input
+              type="radio"
+              name="type"
+              checked={formData.type === 'debit'}
+              onChange={() => setFormData({ ...formData, type: 'debit' })}
+              className="text-primary-600 focus:ring-primary-500 w-4 h-4"
             />
-            <Input
-              label="Amount"
-              type="number"
-              step="0.01"
-              min="0.01"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              required
+            <span>Expense</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:text-base text-gray-300">
+            <input
+              type="radio"
+              name="type"
+              checked={formData.type === 'credit'}
+              onChange={() => setFormData({ ...formData, type: 'credit' })}
+              className="text-primary-600 focus:ring-primary-500 w-4 h-4"
             />
-          </>
-        )}
+            <span>Income</span>
+          </label>
+        </div>
+
+        <Input
+          label="Amount"
+          type="number"
+          step="0.01"
+          min="0.01"
+          value={formData.amount}
+          onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+          required
+        />
 
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">Description</label>
