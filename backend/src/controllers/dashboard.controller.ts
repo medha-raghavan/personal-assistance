@@ -10,6 +10,13 @@ const UNCATEGORIZED_COLOR = '#8B93A3';
 
 type MatchFilter = Record<string, unknown>;
 
+/** Exclude transfers / internal movements from dashboard money totals */
+const EXCLUDE_INTERNAL_TAGS: MatchFilter = {
+  tags: {
+    $not: { $elemMatch: { $regex: 'internal', $options: 'i' } },
+  },
+};
+
 function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
@@ -122,6 +129,7 @@ function buildMatch(
 ): MatchFilter {
   const match: MatchFilter = {
     userId: new mongoose.Types.ObjectId(userId),
+    ...EXCLUDE_INTERNAL_TAGS,
   };
 
   if (!opts.ignorePeriod && opts.range) {
@@ -176,6 +184,7 @@ export async function getOverview(
           $match: {
             userId: new mongoose.Types.ObjectId(req.userId),
             transactionDate: { $gte: startOfMonth },
+            ...EXCLUDE_INTERNAL_TAGS,
           },
         },
         {
@@ -192,6 +201,7 @@ export async function getOverview(
           $match: {
             userId: new mongoose.Types.ObjectId(req.userId),
             transactionDate: { $gte: startOfLastMonth, $lte: endOfLastMonth },
+            ...EXCLUDE_INTERNAL_TAGS,
           },
         },
         {
@@ -271,6 +281,7 @@ export async function getTrends(
         $match: {
           userId: new mongoose.Types.ObjectId(req.userId),
           transactionDate: { $gte: startDate },
+          ...EXCLUDE_INTERNAL_TAGS,
         },
       },
       {
@@ -315,6 +326,7 @@ export async function getCategoryBreakdown(
     const matchStage: Record<string, unknown> = {
       userId: new mongoose.Types.ObjectId(req.userId),
       type: 'debit',
+      ...EXCLUDE_INTERNAL_TAGS,
     };
 
     if (startDate || endDate) {
@@ -379,6 +391,7 @@ export async function getCalendarHeatmap(
         $match: {
           userId: new mongoose.Types.ObjectId(req.userId),
           transactionDate: { $gte: startDate, $lte: endDate },
+          ...EXCLUDE_INTERNAL_TAGS,
         },
       },
       {
@@ -445,6 +458,7 @@ export async function getSummary(
     const trendMatch: MatchFilter = {
       userId: new mongoose.Types.ObjectId(userId),
       transactionDate: { $gte: trendStart },
+      ...EXCLUDE_INTERNAL_TAGS,
     };
     if (sectionId) {
       trendMatch.sectionId = new mongoose.Types.ObjectId(sectionId);
