@@ -11,9 +11,10 @@ export const FINANCES_SUBNAV_ITEMS = [
   { key: 'finances', label: 'Dashboard', href: '/(tabs)/finances', subtitle: 'Overview' },
   { key: 'transactions', label: 'Transactions', href: '/(tabs)/transactions', subtitle: 'Transactions' },
   { key: 'sections', label: 'Accounts', href: '/(tabs)/sections', subtitle: 'Accounts' },
-  { key: 'categories', label: 'Categories', href: '/(tabs)/categories', subtitle: 'Categories' },
+  { key: 'goals', label: 'Goals', href: '/(tabs)/goals', subtitle: 'Goals' },
   { key: 'trips', label: 'Trips', href: '/(tabs)/trips', subtitle: 'Trips' },
   { key: 'tax', label: 'Tax', href: '/(tabs)/tax', subtitle: 'Tax' },
+  { key: 'categories', label: 'Categories', href: '/(tabs)/categories', subtitle: 'Categories' },
 ] as const;
 
 export type FinancesSubNavKey = (typeof FINANCES_SUBNAV_ITEMS)[number]['key'];

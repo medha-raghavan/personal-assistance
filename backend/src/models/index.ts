@@ -9,6 +9,15 @@ export { UploadSession, IUploadSession, IParsedTransaction } from './UploadSessi
 export { Category, ICategory, DEFAULT_CATEGORIES } from './Category.js';
 export { TripExpense, ITripExpense, IExpenseSplit } from './TripExpense.js';
 export {
+  Goal,
+  IGoal,
+  GoalType,
+  IGoalDetails,
+  IGoalDetailsGoal,
+  IGoalDetailsLoan,
+  IGoalDetailsSip,
+} from './Goal.js';
+export {
   ScheduledWhatsAppMessage,
   IScheduledWhatsAppMessage,
   ScheduledMessageStatus,

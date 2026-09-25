@@ -77,6 +77,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="goals"
+        options={{
+          href: null,
+          title: 'Goals',
+          headerShown: false,
+        }}
+      />
+      <Tabs.Screen
         name="categories"
         options={{
           href: null,
@@ -99,8 +107,7 @@ export default function TabLayout() {
           title: 'Tax',
           headerShown: false,
         }}
-      />
-      <Tabs.Screen
+      />      <Tabs.Screen
         name="whatsapp"
         options={{
           title: 'WhatsApp',
