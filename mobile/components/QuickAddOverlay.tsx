@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   Modal,
   ScrollView,
@@ -101,6 +102,7 @@ export function QuickAddOverlay() {
 
   const [selectedSection, setSelectedSection] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [description, setDescription] = useState('');
   const [frozenPayment, setFrozenPayment] = useState<PendingPayment | null>(null);
   const [cachedSections, setCachedSections] = useState<CachedSection[]>([]);
   const [cachedCategories, setCachedCategories] = useState<CachedCategory[]>([]);
@@ -200,6 +202,7 @@ export function QuickAddOverlay() {
       Alert.alert('Success', 'Transaction recorded!');
       dismissPayment(variables.paymentId);
       setSelectedCategory('');
+      setDescription('');
       setFrozenPayment(null);
       createMutation.reset();
       void flushOfflineTransactionQueue();
@@ -229,6 +232,7 @@ export function QuickAddOverlay() {
                 });
                 dismissPayment(variables.paymentId);
                 setSelectedCategory('');
+                setDescription('');
                 setFrozenPayment(null);
                 createMutation.reset();
                 Alert.alert(
@@ -279,6 +283,7 @@ export function QuickAddOverlay() {
     }
 
     setSelectedCategory('');
+    setDescription(currentPayment.merchant || 'Payment');
 
     if (sections.length > 0) {
       setSelectedSection((prev) =>
@@ -308,6 +313,12 @@ export function QuickAddOverlay() {
       return;
     }
 
+    const trimmedDescription = description.trim();
+    if (!trimmedDescription) {
+      Alert.alert('Description required', 'Please enter a description for this transaction.');
+      return;
+    }
+
     setFrozenPayment(payment);
 
     createMutation.mutate({
@@ -315,7 +326,7 @@ export function QuickAddOverlay() {
       sectionId: selectedSection,
       amount: payment.amount,
       type: payment.type,
-      description: payment.merchant || 'Payment',
+      description: trimmedDescription,
       categoryId: selectedCategory || undefined,
       transactionDate: (payment.date ?? new Date()).toISOString(),
     });
@@ -396,11 +407,8 @@ export function QuickAddOverlay() {
                 {displayPayment.type === 'credit' ? '+' : '-'}
                 {formatCurrency(displayPayment.amount)}
               </Text>
-              <Text style={{ color: colors.textSecondary }} className="mt-1" numberOfLines={2}>
-                {displayPayment.merchant}
-              </Text>
               {displayPayment.upiId && (
-                <Text style={{ color: colors.textMuted }} className="text-xs mt-1">
+                <Text style={{ color: colors.textMuted }} className="text-xs mt-2">
                   {displayPayment.upiId}
                 </Text>
               )}
@@ -409,6 +417,27 @@ export function QuickAddOverlay() {
                   Ref {displayPayment.referenceNumber}
                 </Text>
               )}
+            </View>
+
+            <View className="mb-4">
+              <Text style={{ color: colors.text }} className="text-sm font-medium mb-2">
+                Description
+              </Text>
+              <TextInput
+                className="rounded-xl px-4 py-3"
+                style={{
+                  backgroundColor: colors.panel2,
+                  color: colors.text,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                placeholderTextColor={colors.textMuted}
+                placeholder="What was this payment for?"
+                value={description}
+                onChangeText={setDescription}
+                editable={!isSaving}
+                multiline
+              />
             </View>
 
             <View className="mb-4">
