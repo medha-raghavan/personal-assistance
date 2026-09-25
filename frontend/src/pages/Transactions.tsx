@@ -18,6 +18,26 @@ function toLocalDateString(date: Date): string {
   ).padStart(2, '0')}`;
 }
 
+function getCurrentMonthRange(): { startDate: string; endDate: string } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return {
+    startDate: toLocalDateString(start),
+    endDate: toLocalDateString(end),
+  };
+}
+
+function createDefaultTransactionFilters(): TransactionFilters {
+  return {
+    page: 1,
+    limit: 100,
+    sortBy: 'transactionDate',
+    sortOrder: 'desc',
+    ...getCurrentMonthRange(),
+  };
+}
+
 function formatDateWithYear(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleDateString('en-IN', {
@@ -35,12 +55,7 @@ interface EditableTransaction extends ParsedTransaction {
 
 export function Transactions() {
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<TransactionFilters>({
-    page: 1,
-    limit: 100,
-    sortBy: 'transactionDate',
-    sortOrder: 'desc',
-  });
+  const [filters, setFilters] = useState<TransactionFilters>(() => createDefaultTransactionFilters());
   const [showFilters, setShowFilters] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -144,15 +159,12 @@ export function Transactions() {
   };
 
   const clearFilters = () => {
-    setFilters({
-      page: 1,
-      limit: 100,
-      sortBy: 'transactionDate',
-      sortOrder: 'desc',
-    });
+    setFilters(createDefaultTransactionFilters());
   };
 
-  const totals = data?.totals;
+  const activeTotalsSource = viewMode === 'calendar' ? calendarData ?? data : data;
+  const totals = activeTotalsSource?.totals;
+  const displayPagination = activeTotalsSource?.pagination ?? pagination;
 
   const handleSort = (column: string) => {
     if (filters.sortBy === column) {
@@ -178,13 +190,19 @@ export function Transactions() {
       : <ArrowDown className="w-3 h-3 ml-1 inline" />;
   };
 
+  const currentMonthRange = getCurrentMonthRange();
+  const isDefaultMonthRange =
+    filters.startDate === currentMonthRange.startDate &&
+    filters.endDate === currentMonthRange.endDate;
+  const hasCustomDateFilter =
+    (!!filters.startDate || !!filters.endDate) && !isDefaultMonthRange;
   const hasActiveFilters = !!(
     filters.keyword ||
     filters.sectionId ||
     (filters.type && filters.type !== 'all') ||
     filters.categoryId ||
-    filters.startDate ||
-    filters.endDate ||
+    hasCustomDateFilter ||
+    (!filters.startDate && !filters.endDate) ||
     filters.minAmount ||
     filters.maxAmount ||
     filters.tags?.length ||
@@ -197,7 +215,7 @@ export function Transactions() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-white">Transactions</h1>
           <p className="text-sm sm:text-base text-gray-400">
-            {pagination?.totalCount || 0} transactions found
+            {displayPagination?.totalCount || 0} transactions found
           </p>
         </div>
         <div className="flex gap-2">
@@ -291,7 +309,17 @@ export function Transactions() {
               className="whitespace-nowrap"
             >
               <span className="hidden sm:inline">Filters</span>
-              {hasActiveFilters && <span className="ml-1">({Object.values(filters).filter(v => v && v !== 'all' && v !== 'transactionDate' && v !== 'desc' && v !== 1 && v !== 100).length - 1})</span>}
+              {hasActiveFilters && <span className="ml-1">({[
+                filters.keyword,
+                filters.sectionId,
+                filters.type && filters.type !== 'all',
+                filters.categoryId,
+                hasCustomDateFilter || (!filters.startDate && !filters.endDate),
+                filters.minAmount,
+                filters.maxAmount,
+                filters.tags?.length,
+                filters.tripId,
+              ].filter(Boolean).length})</span>}
             </Button>
             
             {hasActiveFilters && (
@@ -407,6 +435,22 @@ export function Transactions() {
                 onChange={(e) => setFilters({ ...filters, maxAmount: e.target.value ? parseFloat(e.target.value) : undefined, page: 1 })}
               />
             </div>
+
+            {(filters.startDate || filters.endDate) && !isDefaultMonthRange && (
+              <button
+                type="button"
+                className="text-sm text-primary-400 hover:text-primary-300"
+                onClick={() =>
+                  setFilters({
+                    ...filters,
+                    ...getCurrentMonthRange(),
+                    page: 1,
+                  })
+                }
+              >
+                Reset to current month
+              </button>
+            )}
             
             <div>
               <Input

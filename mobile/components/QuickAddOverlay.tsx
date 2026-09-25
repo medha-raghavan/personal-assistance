@@ -57,6 +57,42 @@ function isNetworkError(error: any): boolean {
   return false;
 }
 
+/** Preferred quick-select chips on SMS payment save (order matters). */
+const QUICK_CATEGORY_NAMES = [
+  'Food & Dining',
+  'Transport',
+  'Shopping',
+  'Groceries',
+  'Health',
+  'Bills & Utilities',
+  'Entertainment',
+];
+
+function getQuickCategories(categories: CachedCategory[]): CachedCategory[] {
+  const byName = new Map(categories.map((c) => [c.name.toLowerCase(), c]));
+  const quick: CachedCategory[] = [];
+  const used = new Set<string>();
+
+  for (const name of QUICK_CATEGORY_NAMES) {
+    const match = byName.get(name.toLowerCase());
+    if (match && !used.has(match._id)) {
+      quick.push(match);
+      used.add(match._id);
+    }
+  }
+
+  // Ensure Transport appears even if named slightly differently (e.g. Transportation)
+  if (!quick.some((c) => /transport/i.test(c.name))) {
+    const transport = categories.find((c) => /transport/i.test(c.name));
+    if (transport && !used.has(transport._id)) {
+      quick.splice(Math.min(1, quick.length), 0, transport);
+      used.add(transport._id);
+    }
+  }
+
+  return quick;
+}
+
 export function QuickAddOverlay() {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuthStore();
@@ -134,6 +170,13 @@ export function QuickAddOverlay() {
           color: c.color || '#6b7280',
         }))
       : cachedCategories;
+
+  const quickCategories = getQuickCategories(categories);
+  // Quick chips first (includes Transport), then remaining categories
+  const orderedCategories = [
+    ...quickCategories,
+    ...categories.filter((c) => !quickCategories.some((q) => q._id === c._id)),
+  ];
 
   const usingCachedLookups =
     (sectionsError || categoriesError || (!sectionsFetching && remoteSections.length === 0 && cachedSections.length > 0)) &&
@@ -440,7 +483,7 @@ export function QuickAddOverlay() {
                       None
                     </Text>
                   </TouchableOpacity>
-                  {categories.map((category) => {
+                  {orderedCategories.map((category) => {
                     const selected = selectedCategory === category._id;
                     return (
                       <TouchableOpacity
