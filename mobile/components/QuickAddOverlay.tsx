@@ -69,6 +69,10 @@ const QUICK_CATEGORY_NAMES = [
   'Entertainment',
 ];
 
+function findUncategorizedCategory(categories: CachedCategory[]): CachedCategory | undefined {
+  return categories.find((c) => c.name.toLowerCase() === 'uncategorized');
+}
+
 function getQuickCategories(categories: CachedCategory[]): CachedCategory[] {
   const byName = new Map(categories.map((c) => [c.name.toLowerCase(), c]));
   const quick: CachedCategory[] = [];
@@ -173,11 +177,16 @@ export function QuickAddOverlay() {
         }))
       : cachedCategories;
 
+  const uncategorizedCategory = findUncategorizedCategory(categories);
   const quickCategories = getQuickCategories(categories);
-  // Quick chips first (includes Transport), then remaining categories
+  // Quick chips first (includes Transport), then remaining categories (skip Uncategorized — own chip)
   const orderedCategories = [
     ...quickCategories,
-    ...categories.filter((c) => !quickCategories.some((q) => q._id === c._id)),
+    ...categories.filter(
+      (c) =>
+        c._id !== uncategorizedCategory?._id &&
+        !quickCategories.some((q) => q._id === c._id)
+    ),
   ];
 
   const usingCachedLookups =
@@ -277,13 +286,30 @@ export function QuickAddOverlay() {
     }
   }, [shouldRenderOverlay, slideAnim]);
 
+  // Initialize only when a new payment opens — do not reset when sections/categories load (that blocked editing description)
   useEffect(() => {
     if (!showQuickAdd || !currentPayment || isSaving) {
       return;
     }
 
-    setSelectedCategory('');
     setDescription(currentPayment.merchant || 'Payment');
+    const uncId = findUncategorizedCategory(categories)?._id || '';
+    setSelectedCategory(uncId);
+  }, [showQuickAdd, currentPayment?.id, isSaving]);
+
+  useEffect(() => {
+    if (!showQuickAdd || !currentPayment || isSaving) {
+      return;
+    }
+    const uncId = findUncategorizedCategory(categories)?._id;
+    if (!uncId) return;
+    setSelectedCategory((prev) => (prev ? prev : uncId));
+  }, [showQuickAdd, currentPayment?.id, categories, isSaving]);
+
+  useEffect(() => {
+    if (!showQuickAdd || !currentPayment || isSaving) {
+      return;
+    }
 
     if (sections.length > 0) {
       setSelectedSection((prev) =>
@@ -321,13 +347,15 @@ export function QuickAddOverlay() {
 
     setFrozenPayment(payment);
 
+    const defaultCategoryId = findUncategorizedCategory(categories)?._id;
+
     createMutation.mutate({
       paymentId: payment.id,
       sectionId: selectedSection,
       amount: payment.amount,
       type: payment.type,
       description: trimmedDescription,
-      categoryId: selectedCategory || undefined,
+      categoryId: selectedCategory || defaultCategoryId || undefined,
       transactionDate: (payment.date ?? new Date()).toISOString(),
     });
   };
@@ -401,7 +429,11 @@ export function QuickAddOverlay() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView className="p-4 max-h-96">
+          <ScrollView
+            className="p-4 max-h-96"
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
             <View className="items-center py-4">
               <Text style={{ color: amountColor }} className="text-4xl font-bold">
                 {displayPayment.type === 'credit' ? '+' : '-'}
@@ -424,7 +456,7 @@ export function QuickAddOverlay() {
                 Description
               </Text>
               <TextInput
-                className="rounded-xl px-4 py-3"
+                className="rounded-xl px-4 py-3 min-h-[48px]"
                 style={{
                   backgroundColor: colors.panel2,
                   color: colors.text,
@@ -437,6 +469,8 @@ export function QuickAddOverlay() {
                 onChangeText={setDescription}
                 editable={!isSaving}
                 multiline
+                scrollEnabled
+                textAlignVertical="top"
               />
             </View>
 
@@ -495,23 +529,36 @@ export function QuickAddOverlay() {
                 </Text>
               ) : (
                 <View className="flex-row flex-wrap gap-2">
-                  <TouchableOpacity
-                    className="px-3 py-2 rounded-full border"
-                    style={{
-                      borderColor: !selectedCategory ? colors.primary : colors.border,
-                      backgroundColor: !selectedCategory ? colors.primary + '22' : colors.panel2,
-                    }}
-                    onPress={() => !isSaving && setSelectedCategory('')}
-                    disabled={isSaving}
-                  >
-                    <Text
+                  {uncategorizedCategory ? (
+                    <TouchableOpacity
+                      className="px-3 py-2 rounded-full border"
                       style={{
-                        color: !selectedCategory ? colors.primary : colors.textSecondary,
+                        borderColor:
+                          selectedCategory === uncategorizedCategory._id
+                            ? colors.primary
+                            : colors.border,
+                        backgroundColor:
+                          selectedCategory === uncategorizedCategory._id
+                            ? colors.primary + '22'
+                            : colors.panel2,
                       }}
+                      onPress={() =>
+                        !isSaving && setSelectedCategory(uncategorizedCategory._id)
+                      }
+                      disabled={isSaving}
                     >
-                      None
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        style={{
+                          color:
+                            selectedCategory === uncategorizedCategory._id
+                              ? colors.primary
+                              : colors.textSecondary,
+                        }}
+                      >
+                        Uncategorized
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                   {orderedCategories.map((category) => {
                     const selected = selectedCategory === category._id;
                     return (
