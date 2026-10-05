@@ -42,7 +42,15 @@ interface SaveTransactionInput {
   type: 'credit' | 'debit';
   description: string;
   categoryId?: string;
+  tags?: string[];
   transactionDate: string;
+}
+
+function parseTagsInput(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
 }
 
 function pickDefaultSection(sections: CachedSection[]): string {
@@ -102,11 +110,18 @@ export function QuickAddOverlay() {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuthStore();
   const { colors } = useTheme();
-  const { showQuickAdd, currentPayment, hidePaymentOverlay, dismissPayment } = usePaymentStore();
+  const {
+    showQuickAdd,
+    currentPayment,
+    hidePaymentOverlay,
+    dismissPayment,
+    pendingPayments,
+  } = usePaymentStore();
 
   const [selectedSection, setSelectedSection] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [description, setDescription] = useState('');
+  const [tagsInput, setTagsInput] = useState('');
   const [frozenPayment, setFrozenPayment] = useState<PendingPayment | null>(null);
   const [cachedSections, setCachedSections] = useState<CachedSection[]>([]);
   const [cachedCategories, setCachedCategories] = useState<CachedCategory[]>([]);
@@ -201,6 +216,7 @@ export function QuickAddOverlay() {
         type: data.type,
         description: data.description,
         categoryId: data.categoryId,
+        tags: data.tags,
         transactionDate: data.transactionDate,
       }),
     onSuccess: (_data, variables) => {
@@ -208,13 +224,18 @@ export function QuickAddOverlay() {
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['sections'] });
-      Alert.alert('Success', 'Transaction recorded!');
       dismissPayment(variables.paymentId);
       setSelectedCategory('');
       setDescription('');
+      setTagsInput('');
       setFrozenPayment(null);
       createMutation.reset();
       void flushOfflineTransactionQueue();
+      const remaining = usePaymentStore.getState().getPendingCount();
+      if (remaining === 0) {
+        hidePaymentOverlay();
+        Alert.alert('Success', 'Transaction recorded!');
+      }
     },
     onError: (error: any, variables) => {
       if (isNetworkError(error)) {
@@ -237,11 +258,13 @@ export function QuickAddOverlay() {
                   type: variables.type,
                   description: variables.description,
                   categoryId: variables.categoryId,
+                  tags: variables.tags,
                   transactionDate: variables.transactionDate,
                 });
                 dismissPayment(variables.paymentId);
                 setSelectedCategory('');
                 setDescription('');
+                setTagsInput('');
                 setFrozenPayment(null);
                 createMutation.reset();
                 Alert.alert(
@@ -293,6 +316,7 @@ export function QuickAddOverlay() {
     }
 
     setDescription(currentPayment.merchant || 'Payment');
+    setTagsInput('');
     const uncId = findUncategorizedCategory(categories)?._id || '';
     setSelectedCategory(uncId);
   }, [showQuickAdd, currentPayment?.id, isSaving]);
@@ -348,6 +372,7 @@ export function QuickAddOverlay() {
     setFrozenPayment(payment);
 
     const defaultCategoryId = findUncategorizedCategory(categories)?._id;
+    const manualTags = parseTagsInput(tagsInput);
 
     createMutation.mutate({
       paymentId: payment.id,
@@ -356,18 +381,41 @@ export function QuickAddOverlay() {
       type: payment.type,
       description: trimmedDescription,
       categoryId: selectedCategory || defaultCategoryId || undefined,
+      tags: manualTags.length > 0 ? manualTags : undefined,
       transactionDate: (payment.date ?? new Date()).toISOString(),
     });
   };
 
-  const handleDismiss = () => {
+  const activePendingCount = pendingPayments.filter((p) => !p.dismissed).length;
+  const currentQueueIndex =
+    displayPayment && activePendingCount > 0
+      ? pendingPayments.filter((p) => !p.dismissed).findIndex((p) => p.id === displayPayment.id) + 1
+      : 0;
+
+  /** Skip this payment (do not save); show the next pending one if any. */
+  const handleSkip = () => {
     if (isSaving) {
       Alert.alert('Saving', 'Please wait for the transaction to finish saving.');
       return;
     }
 
-    if (currentPayment) {
-      dismissPayment(currentPayment.id);
+    const payment = frozenPayment ?? currentPayment;
+    if (!payment) return;
+
+    dismissPayment(payment.id);
+    setFrozenPayment(null);
+    createMutation.reset();
+
+    if (usePaymentStore.getState().getPendingCount() === 0) {
+      hidePaymentOverlay();
+    }
+  };
+
+  /** Close sheet; pending payments stay in queue for later (Settings). */
+  const handleClose = () => {
+    if (isSaving) {
+      Alert.alert('Saving', 'Please wait for the transaction to finish saving.');
+      return;
     }
     hidePaymentOverlay();
     setFrozenPayment(null);
@@ -417,6 +465,11 @@ export function QuickAddOverlay() {
                 <Text style={{ color: colors.text }} className="font-semibold">
                   {displayPayment.bank || 'UPI'} Transaction
                 </Text>
+                {activePendingCount > 1 && (
+                  <Text style={{ color: colors.textMuted }} className="text-xs mt-0.5">
+                    {currentQueueIndex} of {activePendingCount} pending
+                  </Text>
+                )}
                 {usingCachedLookups && (
                   <Text style={{ color: '#E8A33D' }} className="text-xs mt-0.5">
                     Offline — showing saved accounts/categories
@@ -424,7 +477,7 @@ export function QuickAddOverlay() {
                 )}
               </View>
             </View>
-            <TouchableOpacity onPress={handleDismiss} className="p-2" disabled={isSaving}>
+            <TouchableOpacity onPress={handleClose} className="p-2" disabled={isSaving}>
               <Ionicons name="close" size={24} color={isSaving ? colors.textMuted : colors.icon} />
             </TouchableOpacity>
           </View>
@@ -471,6 +524,30 @@ export function QuickAddOverlay() {
                 multiline
                 scrollEnabled
                 textAlignVertical="top"
+              />
+            </View>
+
+            <View className="mb-4">
+              <Text style={{ color: colors.text }} className="text-sm font-medium mb-2">
+                Tags (optional)
+              </Text>
+              <Text style={{ color: colors.textMuted }} className="text-xs mb-2">
+                Comma-separated. Added on top of tags auto-detected from the description.
+              </Text>
+              <TextInput
+                className="rounded-xl px-4 py-3"
+                style={{
+                  backgroundColor: colors.panel2,
+                  color: colors.text,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+                placeholderTextColor={colors.textMuted}
+                placeholder="e.g. internal, work, reimbursable"
+                value={tagsInput}
+                onChangeText={setTagsInput}
+                editable={!isSaving}
+                autoCapitalize="none"
               />
             </View>
 
@@ -590,10 +667,12 @@ export function QuickAddOverlay() {
               <TouchableOpacity
                 className="flex-1 py-4 rounded-xl items-center"
                 style={{ backgroundColor: colors.panel2, opacity: isSaving ? 0.5 : 1 }}
-                onPress={handleDismiss}
+                onPress={handleSkip}
                 disabled={isSaving}
               >
-                <Text style={{ color: colors.textSecondary }} className="font-medium">Skip</Text>
+                <Text style={{ color: colors.textSecondary }} className="font-medium">
+                  {activePendingCount > 1 ? 'Skip this' : 'Skip'}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-1 py-4 rounded-xl items-center"

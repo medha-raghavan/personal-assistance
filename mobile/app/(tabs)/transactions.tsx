@@ -1421,6 +1421,7 @@ function UploadStatementModal({
   };
 
   const toggleTransaction = (index: number) => {
+    if (uploadPreview?.transactions[index]?.isDuplicate) return;
     const newSet = new Set(selectedIndices);
     if (newSet.has(index)) {
       newSet.delete(index);
@@ -1428,6 +1429,15 @@ function UploadStatementModal({
       newSet.add(index);
     }
     setSelectedIndices(newSet);
+  };
+
+  const skipTransaction = (index: number) => {
+    if (uploadPreview?.transactions[index]?.isDuplicate) return;
+    setSelectedIndices((prev) => {
+      const next = new Set(prev);
+      next.delete(index);
+      return next;
+    });
   };
 
   const handleConfirm = async () => {
@@ -1643,9 +1653,22 @@ function UploadStatementModal({
                         )}
                       </View>
                     </View>
-                    <Text className={`font-semibold ${item.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
-                      {item.type === 'credit' ? '+' : '-'}₹{item.amount.toLocaleString('en-IN')}
-                    </Text>
+                    <View className="items-end">
+                      <Text className={`font-semibold ${item.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                        {item.type === 'credit' ? '+' : '-'}₹{item.amount.toLocaleString('en-IN')}
+                      </Text>
+                      {!item.isDuplicate && (
+                        <TouchableOpacity
+                          className="mt-1 px-2 py-0.5"
+                          onPress={() => skipTransaction(index)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={{ color: colors.textMuted }} className="text-xs">
+                            {selectedIndices.has(index) ? 'Skip' : 'Skipped'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </TouchableOpacity>
                 )}
                 style={{ maxHeight: 300 }}

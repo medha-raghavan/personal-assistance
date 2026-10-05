@@ -1534,7 +1534,13 @@ function UploadModal({
 
   const toggleTransaction = (index: number) => {
     setEditableTransactions((prev) =>
-      prev.map((t, i) => (i === index ? { ...t, isSelected: !t.isSelected } : t))
+      prev.map((t, i) => (i === index && !t.isDuplicate ? { ...t, isSelected: !t.isSelected } : t))
+    );
+  };
+
+  const skipTransaction = (index: number) => {
+    setEditableTransactions((prev) =>
+      prev.map((t, i) => (i === index && !t.isDuplicate ? { ...t, isSelected: false } : t))
     );
   };
 
@@ -1692,6 +1698,15 @@ function UploadModal({
                     </td>
                     <td className={`px-3 py-3 text-right text-sm font-medium whitespace-nowrap ${txn.type === 'credit' ? 'text-green-400' : 'text-red-400'}`}>
                       {txn.type === 'credit' ? '+' : '-'}{formatCurrency(txn.amount)}
+                      {!txn.isDuplicate && (
+                        <button
+                          type="button"
+                          onClick={() => skipTransaction(index)}
+                          className="block ml-auto mt-1 text-xs text-gray-500 hover:text-gray-300 font-normal"
+                        >
+                          {txn.isSelected ? 'Skip' : 'Skipped'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

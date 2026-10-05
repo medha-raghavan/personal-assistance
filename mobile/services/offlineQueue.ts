@@ -28,6 +28,7 @@ export async function flushOfflineTransactionQueue(): Promise<number> {
           type: item.type,
           description: item.description,
           categoryId: item.categoryId,
+          tags: item.tags,
           transactionDate: item.transactionDate,
         });
         synced += 1;

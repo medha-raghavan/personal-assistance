@@ -186,7 +186,11 @@ export async function createTransaction(
       throw new ApiError(400, 'Duplicate transaction detected');
     }
 
-    const autoTags = tags?.length > 0 ? tags : extractKeywordsFromDescription(description);
+    const manualTags = Array.isArray(tags)
+      ? tags.map((t: string) => String(t).trim()).filter(Boolean)
+      : [];
+    const autoTags = extractKeywordsFromDescription(description);
+    const mergedTags = [...new Set([...manualTags, ...autoTags])];
 
     const transaction = new Transaction({
       sectionId,
@@ -197,7 +201,7 @@ export async function createTransaction(
       type,
       description,
       reference,
-      tags: autoTags,
+      tags: mergedTags,
       categoryId: categoryId || undefined,
       tripId,
       currency: currency || 'INR',

@@ -24,6 +24,7 @@ export interface OfflineQueuedTransaction {
   type: 'credit' | 'debit';
   description: string;
   categoryId?: string;
+  tags?: string[];
   transactionDate: string;
   createdAt: number;
 }

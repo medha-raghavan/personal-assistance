@@ -115,7 +115,13 @@ export function Upload() {
   
   const toggleTransaction = (index: number) => {
     setEditableTransactions((prev) =>
-      prev.map((t, i) => (i === index ? { ...t, isSelected: !t.isSelected } : t))
+      prev.map((t, i) => (i === index && !t.isDuplicate ? { ...t, isSelected: !t.isSelected } : t))
+    );
+  };
+
+  const skipTransaction = (index: number) => {
+    setEditableTransactions((prev) =>
+      prev.map((t, i) => (i === index && !t.isDuplicate ? { ...t, isSelected: false } : t))
     );
   };
   
@@ -323,6 +329,15 @@ export function Upload() {
                         {txn.type === 'credit' ? '+' : '-'}
                         {formatCurrency(txn.amount)}
                       </span>
+                      {!txn.isDuplicate && (
+                        <button
+                          type="button"
+                          onClick={() => skipTransaction(index)}
+                          className="block ml-auto mt-1 text-xs text-gray-500 hover:text-gray-300"
+                        >
+                          {txn.isSelected ? 'Skip' : 'Skipped'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -333,7 +348,7 @@ export function Upload() {
         
         <div className="flex items-center justify-between text-sm text-gray-400">
           <p>
-            Tip: Click on a row's checkbox to exclude it from import. Change category using the dropdown.
+            Tip: Uncheck a row or use Skip to leave it out of import; other selected rows still import.
           </p>
           <p>{selectedCount} of {nonDuplicateCount} transactions selected</p>
         </div>
