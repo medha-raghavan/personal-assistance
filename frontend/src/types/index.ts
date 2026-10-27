@@ -168,7 +168,7 @@ export interface CategoryBreakdown {
 }
 
 export interface DashboardSummaryFilters {
-  period: '7' | '30' | '90' | '365' | 'all' | 'custom';
+  period: 'month' | '7' | '30' | '90' | '365' | 'all' | 'custom';
   sectionId?: string;
   type?: 'all' | 'credit' | 'debit';
   categoryIds?: string[];

@@ -26,6 +26,7 @@ type Period = DashboardSummaryPeriod;
 type TxType = NonNullable<DashboardSummaryFilters['type']>;
 
 const PERIODS: { value: Period; label: string }[] = [
+  { value: 'month', label: 'Current month' },
   { value: '7', label: 'Last 7 days' },
   { value: '30', label: 'Last 30 days' },
   { value: '90', label: 'Last 90 days' },
@@ -89,7 +90,7 @@ export default function DashboardScreen() {
       };
 
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [period, setPeriod] = useState<Period>('30');
+  const [period, setPeriod] = useState<Period>('month');
   const [sectionId, setSectionId] = useState('');
   const [type, setType] = useState<TxType>('all');
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
@@ -132,7 +133,7 @@ export default function DashboardScreen() {
 
   function resetFilters() {
     setSectionId('');
-    setPeriod('30');
+    setPeriod('month');
     setType('all');
     setCategoryIds([]);
     setStartDate('');

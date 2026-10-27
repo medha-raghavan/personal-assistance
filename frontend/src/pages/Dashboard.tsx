@@ -9,6 +9,7 @@ type Period = DashboardSummaryFilters['period'];
 type TxType = NonNullable<DashboardSummaryFilters['type']>;
 
 const PERIOD_SHORT: Record<Exclude<Period, 'custom'>, string> = {
+  month: 'This month',
   '7': '7d',
   '30': '30d',
   '90': '90d',
@@ -50,7 +51,7 @@ function fmtTxDate(value: string): string {
 export function Dashboard() {
   const navigate = useNavigate();
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [period, setPeriod] = useState<Period>('30');
+  const [period, setPeriod] = useState<Period>('month');
   const [sectionId, setSectionId] = useState('');
   const [type, setType] = useState<TxType>('all');
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
@@ -117,7 +118,7 @@ export function Dashboard() {
 
   function resetFilters() {
     setSectionId('');
-    setPeriod('30');
+    setPeriod('month');
     setType('all');
     setCategoryIds([]);
     setStartDate('');
@@ -205,6 +206,7 @@ export function Dashboard() {
             <div className="fgroup">
               <label>Period</label>
               <select value={period} onChange={(e) => handlePeriodChange(e.target.value as Period)}>
+                <option value="month">Current month</option>
                 <option value="7">Last 7 days</option>
                 <option value="30">Last 30 days</option>
                 <option value="90">Last 90 days</option>

@@ -118,7 +118,7 @@ export const authService = {
 };
 
 // Dashboard Service
-export type DashboardSummaryPeriod = '7' | '30' | '90' | '365' | 'all' | 'custom';
+export type DashboardSummaryPeriod = 'month' | '7' | '30' | '90' | '365' | 'all' | 'custom';
 
 export interface DashboardSummaryFilters {
   period: DashboardSummaryPeriod;

@@ -57,7 +57,7 @@ function resolvePeriod(
   startDate?: unknown,
   endDate?: unknown
 ): { range: { $gte?: Date; $lte?: Date } | null; periodLabel: string; period: string } {
-  const period = typeof periodRaw === 'string' && periodRaw ? periodRaw : '30';
+  const period = typeof periodRaw === 'string' && periodRaw ? periodRaw : 'month';
   const now = new Date();
   const todayEnd = endOfDay(now);
   const rolling: Record<string, string> = {
@@ -65,6 +65,12 @@ function resolvePeriod(
     '30': 'last 30 days',
     '90': 'last 90 days',
   };
+
+  if (period === 'month') {
+    const start = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+    const monthLabel = start.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+    return { range: { $gte: start, $lte: todayEnd }, periodLabel: monthLabel, period: 'month' };
+  }
 
   if (period === '7' || period === '30' || period === '90') {
     const days = parseInt(period, 10);
@@ -98,8 +104,9 @@ function resolvePeriod(
     };
   }
 
-  const start = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30));
-  return { range: { $gte: start, $lte: todayEnd }, periodLabel: 'last 30 days', period: '30' };
+  const start = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+  const monthLabel = start.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  return { range: { $gte: start, $lte: todayEnd }, periodLabel: monthLabel, period: 'month' };
 }
 
 function parseCategoryIds(raw: unknown): string[] {
